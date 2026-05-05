@@ -59,6 +59,12 @@
             <span>Confirm password</span>
             <input type="password" id="auth-confirm" autocomplete="new-password" minlength="8" />
           </label>
+          <label id="auth-invite-label" hidden>
+            <span>Invite code</span>
+            <input type="text" id="auth-invite" autocomplete="off"
+              autocapitalize="off" autocorrect="off" spellcheck="false"
+              placeholder="Required to create an account" />
+          </label>
           <button type="submit" id="auth-submit" class="primary">Sign in</button>
           <span id="auth-status" class="status"></span>
           <p class="auth-help" id="auth-help">
@@ -99,10 +105,6 @@
         <button class="tab" data-tab="habits">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           Habits
-        </button>
-        <button class="tab" data-tab="goals">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-          Goals
         </button>
       </nav>
 
@@ -330,17 +332,17 @@
             </div>
           </div>
         </div>
+
+        <div class="daily-log-toolbar">
+          <button id="open-goals-btn" type="button" class="primary">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            Goals
+          </button>
+        </div>
       </section>
 
       <!-- ===== Habits ===== -->
       <section id="habits-tab" class="tab-panel">
-        <div class="habits-toolbar">
-          <button id="add-habit-btn" type="button" class="primary">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-            Add habit
-          </button>
-        </div>
-
         <div class="card">
           <div class="card-header">
             <h2>Today</h2>
@@ -353,89 +355,12 @@
           <h2>All habits</h2>
         </div>
         <ul id="all-habits-list" class="all-habits-list"></ul>
-      </section>
 
-      <!-- ===== Goals ===== -->
-      <section id="goals-tab" class="tab-panel">
-        <div class="card goals-card">
-          <div class="card-header">
-            <h2>Daily macro targets</h2>
-            <span class="badge">Per day</span>
-          </div>
-          <p class="hint">Set your daily calorie target, then split protein, carbs, and fat as percentages of total calories. Targets in grams are computed automatically.</p>
-          <div class="goals-grid">
-            <label class="goal-field cal">
-              <span>Calories</span>
-              <div class="input-with-unit">
-                <input type="number" id="g-calories" min="0" step="1" placeholder="2000" />
-                <span class="unit-tag">kcal</span>
-              </div>
-            </label>
-            <label class="goal-field protein">
-              <span>Protein</span>
-              <div class="input-with-unit">
-                <input type="number" id="g-protein-pct" min="0" max="100" step="1" placeholder="30" />
-                <span class="unit-tag">%</span>
-              </div>
-            </label>
-            <label class="goal-field carbs">
-              <span>Carbs</span>
-              <div class="input-with-unit">
-                <input type="number" id="g-carbs-pct" min="0" max="100" step="1" placeholder="40" />
-                <span class="unit-tag">%</span>
-              </div>
-            </label>
-            <label class="goal-field fat">
-              <span>Fat</span>
-              <div class="input-with-unit">
-                <input type="number" id="g-fat-pct" min="0" max="100" step="1" placeholder="30" />
-                <span class="unit-tag">%</span>
-              </div>
-            </label>
-            <label class="goal-field water">
-              <span>Water</span>
-              <div class="input-with-unit">
-                <input type="number" id="g-water" min="0" step="1" placeholder="96" />
-                <span class="unit-tag">oz</span>
-              </div>
-            </label>
-          </div>
-          <p class="hint" id="macro-pct-hint" style="margin-top: 14px;"></p>
-        </div>
-
-        <div class="card goals-card">
-          <div class="card-header">
-            <h2>Body composition</h2>
-            <span class="badge">Long-term</span>
-          </div>
-          <p class="hint">Where are you headed? Track your goal weight and body fat percentage.</p>
-          <div class="goals-grid">
-            <label>
-              <span>Goal weight</span>
-              <div class="input-with-unit">
-                <input type="number" id="g-weight" min="0" step="0.1" placeholder="160" />
-                <select id="g-weight-unit" class="unit-select">
-                  <option value="lbs">lbs</option>
-                  <option value="kg">kg</option>
-                </select>
-              </div>
-            </label>
-            <label>
-              <span>Goal body fat</span>
-              <div class="input-with-unit">
-                <input type="number" id="g-bf" min="0" max="100" step="0.1" placeholder="15" />
-                <span class="unit-tag">%</span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div class="goals-actions">
-          <button id="goals-save-btn" type="button" class="primary">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Save goals
+        <div class="habits-toolbar">
+          <button id="add-habit-btn" type="button" class="primary">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Add habit
           </button>
-          <span id="goals-status" class="status"></span>
         </div>
       </section>
 
@@ -464,6 +389,88 @@
         <div id="photo-gallery" class="photo-gallery"></div>
       </section>
     </main>
+
+    <!-- ===== Goals Modal ===== -->
+    <div id="goals-modal" class="modal-overlay" hidden>
+      <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="goals-modal-title">
+        <button id="goals-modal-close" type="button" class="modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+        <h2 id="goals-modal-title">Goals</h2>
+
+        <h3 class="modal-section-title">Daily macro targets</h3>
+        <p class="hint">Set your daily calorie target, then split protein, carbs, and fat as percentages of total calories.</p>
+        <div class="goals-grid">
+          <label class="goal-field cal">
+            <span>Calories</span>
+            <div class="input-with-unit">
+              <input type="number" id="g-calories" min="0" step="1" placeholder="2000" />
+              <span class="unit-tag">kcal</span>
+            </div>
+          </label>
+          <label class="goal-field protein">
+            <span>Protein</span>
+            <div class="input-with-unit">
+              <input type="number" id="g-protein-pct" min="0" max="100" step="1" placeholder="30" />
+              <span class="unit-tag">%</span>
+            </div>
+          </label>
+          <label class="goal-field carbs">
+            <span>Carbs</span>
+            <div class="input-with-unit">
+              <input type="number" id="g-carbs-pct" min="0" max="100" step="1" placeholder="40" />
+              <span class="unit-tag">%</span>
+            </div>
+          </label>
+          <label class="goal-field fat">
+            <span>Fat</span>
+            <div class="input-with-unit">
+              <input type="number" id="g-fat-pct" min="0" max="100" step="1" placeholder="30" />
+              <span class="unit-tag">%</span>
+            </div>
+          </label>
+          <label class="goal-field water">
+            <span>Water</span>
+            <div class="input-with-unit">
+              <input type="number" id="g-water" min="0" step="1" placeholder="96" />
+              <span class="unit-tag">oz</span>
+            </div>
+          </label>
+        </div>
+        <p class="hint" id="macro-pct-hint" style="margin-top: 12px;"></p>
+
+        <h3 class="modal-section-title">Body composition</h3>
+        <p class="hint">Track your goal weight and body fat percentage.</p>
+        <div class="goals-grid">
+          <label>
+            <span>Goal weight</span>
+            <div class="input-with-unit">
+              <input type="number" id="g-weight" min="0" step="0.1" placeholder="160" />
+              <select id="g-weight-unit" class="unit-select">
+                <option value="lbs">lbs</option>
+                <option value="kg">kg</option>
+              </select>
+            </div>
+          </label>
+          <label>
+            <span>Goal body fat</span>
+            <div class="input-with-unit">
+              <input type="number" id="g-bf" min="0" max="100" step="0.1" placeholder="15" />
+              <span class="unit-tag">%</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="actions modal-footer-actions">
+          <button id="goals-save-btn" type="button" class="primary">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save goals
+          </button>
+          <button type="button" id="goals-modal-cancel" class="btn-ghost">Cancel</button>
+          <span id="goals-status" class="status"></span>
+        </div>
+      </div>
+    </div>
 
     <!-- ===== Add Habit Modal ===== -->
     <div id="habit-modal" class="modal-overlay" hidden>

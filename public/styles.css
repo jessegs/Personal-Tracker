@@ -1521,17 +1521,20 @@ button.primary:disabled {
    Habits tab
    ================================================================= */
 
-.habits-toolbar {
+.habits-toolbar,
+.daily-log-toolbar {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 18px;
+  margin-top: 24px;
 }
 
 @media (max-width: 600px) {
-  .habits-toolbar {
+  .habits-toolbar,
+  .daily-log-toolbar {
     justify-content: stretch;
   }
-  .habits-toolbar .primary {
+  .habits-toolbar .primary,
+  .daily-log-toolbar .primary {
     width: 100%;
     justify-content: center;
   }
@@ -1571,6 +1574,30 @@ button.primary:disabled {
   padding: 28px 26px 22px;
   box-shadow: var(--shadow-lg);
   animation: zoomIn 0.22s var(--ease-spring);
+}
+
+.modal-card-wide {
+  max-width: 580px;
+}
+
+.modal-section-title {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 22px 0 8px;
+}
+
+.modal-section-title:first-of-type {
+  margin-top: 8px;
+}
+
+.modal-footer-actions {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 
 .modal-card h2 {
@@ -2029,16 +2056,13 @@ button.primary:disabled {
 @media (max-width: 600px) {
   .topbar {
     padding: 16px 18px;
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
-  }
-
-  .brand {
-    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .tabs {
+    order: 1;
+    width: 100%;
     justify-content: center;
   }
 

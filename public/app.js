@@ -30,11 +30,13 @@ function setAuthMode(mode) {
   });
   if (mode === 'signup') {
     authConfirmLabel.hidden = false;
+    $('auth-invite-label').hidden = false;
     authSubmit.textContent = 'Create account';
     $('auth-password').setAttribute('autocomplete', 'new-password');
     authHelp.innerHTML = "Already have an account? Switch to <strong>Sign in</strong> above.";
   } else {
     authConfirmLabel.hidden = true;
+    $('auth-invite-label').hidden = true;
     authSubmit.textContent = 'Sign in';
     $('auth-password').setAttribute('autocomplete', 'current-password');
     authHelp.innerHTML = "Don't have an account? Switch to <strong>Create account</strong> above.";
@@ -50,6 +52,7 @@ authForm.addEventListener('submit', async (e) => {
     setStatus(authStatus, 'Username and password required', 'error');
     return;
   }
+  let inviteCode = '';
   if (authMode === 'signup') {
     if (password.length < 8) {
       setStatus(authStatus, 'Password must be at least 8 characters', 'error');
@@ -60,15 +63,22 @@ authForm.addEventListener('submit', async (e) => {
       setStatus(authStatus, 'Passwords do not match', 'error');
       return;
     }
+    inviteCode = $('auth-invite').value.trim();
+    if (!inviteCode) {
+      setStatus(authStatus, 'Invite code required', 'error');
+      return;
+    }
   }
   authSubmit.disabled = true;
   setStatus(authStatus, authMode === 'signup' ? 'Creating account…' : 'Signing in…');
   try {
     const path = authMode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+    const payload = { username, password };
+    if (authMode === 'signup') payload.invite_code = inviteCode;
     const res = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed');
@@ -651,16 +661,40 @@ async function saveGoals() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed');
     currentGoals = data;
-    setStatus(goalStatus, 'Goals saved', 'success');
     applyGoalsToCards();
     syncWeightInput();
     renderWeightChart();
+    closeGoalsModal();
   } catch (err) {
     setStatus(goalStatus, err.message, 'error');
   }
 }
 
 $('goals-save-btn').addEventListener('click', saveGoals);
+
+// Goals modal
+const goalsModal = $('goals-modal');
+$('open-goals-btn').addEventListener('click', openGoalsModal);
+$('goals-modal-close').addEventListener('click', closeGoalsModal);
+$('goals-modal-cancel').addEventListener('click', closeGoalsModal);
+
+goalsModal.addEventListener('click', (e) => {
+  if (e.target === goalsModal) closeGoalsModal();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !goalsModal.hidden) closeGoalsModal();
+});
+
+function openGoalsModal() {
+  renderGoalForm();
+  goalsModal.hidden = false;
+}
+
+function closeGoalsModal() {
+  goalsModal.hidden = true;
+  setStatus(goalStatus, '');
+}
 
 const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 };
 

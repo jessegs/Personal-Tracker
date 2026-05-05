@@ -360,6 +360,7 @@ const photoUpload = multer({
 
 // ===== Auth routes =====
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
+const INVITE_CODE = process.env.INVITE_CODE || 'F3Sienna';
 
 function adoptOrphanData(userId) {
   db.prepare('UPDATE entries SET user_id = ? WHERE user_id IS NULL').run(userId);
@@ -370,7 +371,10 @@ function adoptOrphanData(userId) {
 }
 
 app.post('/api/auth/signup', (req, res) => {
-  const { username, password } = req.body || {};
+  const { username, password, invite_code } = req.body || {};
+  if (!invite_code || typeof invite_code !== 'string' || invite_code.trim() !== INVITE_CODE) {
+    return res.status(403).json({ error: 'Invalid invite code' });
+  }
   if (!username || !USERNAME_RE.test(username)) {
     return res.status(400).json({ error: 'Username must be 3-32 chars (letters, numbers, _ . -)' });
   }
