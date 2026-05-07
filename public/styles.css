@@ -1891,6 +1891,145 @@ button.primary:disabled {
 }
 
 /* =================================================================
+   Body Measurements card
+   ================================================================= */
+
+.measurements-card {
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+
+.measurements-card .hint {
+  margin: 0 0 14px;
+}
+
+.measurements-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 800px) {
+  .measurements-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.measurement-field > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.measurement-field > span > .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--field-color, var(--accent));
+}
+
+.measurement-field[data-key="neck"]        { --field-color: #4cc9ff; }
+.measurement-field[data-key="shoulders"]   { --field-color: #7c5cff; }
+.measurement-field[data-key="left_bicep"]  { --field-color: #4dd6a8; }
+.measurement-field[data-key="right_bicep"] { --field-color: #2ec4b6; }
+.measurement-field[data-key="chest"]       { --field-color: #ff8a4c; }
+.measurement-field[data-key="waist"]       { --field-color: #ff5c8a; }
+.measurement-field[data-key="left_thigh"]  { --field-color: #ffc857; }
+.measurement-field[data-key="right_thigh"] { --field-color: #ff9d6b; }
+
+/* =================================================================
+   Daily check-in card (sleep + stress)
+   ================================================================= */
+
+.check-in-card {
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+
+.check-in-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.check-in-row .check-in-status {
+  grid-column: 1 / -1;
+  margin-top: -4px;
+}
+
+.duration-input {
+  display: flex;
+  align-items: stretch;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: all 0.2s var(--ease);
+}
+
+.duration-input:focus-within {
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.06);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
+}
+
+.duration-input input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 12px 0;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+.duration-input input::placeholder {
+  color: var(--muted-2);
+  font-weight: 600;
+}
+
+.duration-input input:focus {
+  outline: none;
+}
+
+.duration-input input::-webkit-outer-spin-button,
+.duration-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.duration-sep {
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted);
+  user-select: none;
+  padding: 0 4px;
+}
+
+#check-in-log-btn {
+  height: 46px;
+}
+
+@media (max-width: 600px) {
+  .check-in-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .check-in-row #check-in-log-btn {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* =================================================================
    Goals tab
    ================================================================= */
 

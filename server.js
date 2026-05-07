@@ -211,6 +211,34 @@ if (!colExists('goals', 'user_id')) {
 }
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS body_measurements (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    neck REAL,
+    shoulders REAL,
+    left_bicep REAL,
+    right_bicep REAL,
+    chest REAL,
+    waist REAL,
+    left_thigh REAL,
+    right_thigh REAL,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, date)
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS daily_check_ins (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    sleep_minutes INTEGER,
+    stress_level INTEGER,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, date)
+  );
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS habits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -730,6 +758,174 @@ app.post('/api/goals', requireAuth, (req, res) => {
     nullableNum(b.goal_body_fat)
   );
   const row = db.prepare('SELECT * FROM goals WHERE user_id = ?').get(req.userId);
+  res.json(row);
+});
+
+// ===== Body measurements =====
+const MEASUREMENT_COLS = [
+  'neck', 'shoulders', 'left_bicep', 'right_bicep',
+  'chest', 'waist', 'left_thigh', 'right_thigh',
+];
+
+app.get('/api/measurement', requireAuth, (req, res) => {
+  const date = req.query.date;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date query (YYYY-MM-DD) required' });
+  }
+  const cols = ['date', ...MEASUREMENT_COLS].join(', ');
+  const row = db
+    .prepare(`SELECT ${cols} FROM body_measurements WHERE user_id = ? AND date = ?`)
+    .get(req.userId, date);
+  if (row) return res.json(row);
+  const empty = { date };
+  for (const c of MEASUREMENT_COLS) empty[c] = null;
+  res.json(empty);
+});
+
+app.get('/api/measurements', requireAuth, (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+  const cols = ['date', ...MEASUREMENT_COLS].join(', ');
+  const rows = db
+    .prepare(
+      `SELECT ${cols} FROM body_measurements WHERE user_id = ? AND date >= ? ORDER BY date ASC`
+    )
+    .all(req.userId, cutoffStr);
+  res.json(rows);
+});
+
+app.post('/api/measurement', requireAuth, (req, res) => {
+  const b = req.body || {};
+  const date = b.date;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'valid date required' });
+  }
+
+  // Build the input record. undefined/null/'' = "not provided" (preserve existing).
+  // A number = update to that value. 0 or negative is rejected.
+  const provided = {};
+  for (const col of MEASUREMENT_COLS) {
+    const v = b[col];
+    if (v === undefined || v === null || v === '') continue;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 1000) {
+      return res.status(400).json({ error: `invalid value for ${col}` });
+    }
+    provided[col] = n;
+  }
+  if (Object.keys(provided).length === 0) {
+    return res.status(400).json({ error: 'provide at least one measurement' });
+  }
+
+  const existing = db
+    .prepare(`SELECT * FROM body_measurements WHERE user_id = ? AND date = ?`)
+    .get(req.userId, date);
+
+  const merged = {};
+  for (const col of MEASUREMENT_COLS) {
+    if (col in provided) merged[col] = provided[col];
+    else if (existing) merged[col] = existing[col];
+    else merged[col] = null;
+  }
+
+  if (existing) {
+    const setClause = MEASUREMENT_COLS.map((c) => `${c} = ?`).join(', ');
+    db.prepare(
+      `UPDATE body_measurements SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND date = ?`
+    ).run(...MEASUREMENT_COLS.map((c) => merged[c]), req.userId, date);
+  } else {
+    const colList = ['user_id', 'date', ...MEASUREMENT_COLS].join(', ');
+    const placeholders = ['?', '?', ...MEASUREMENT_COLS.map(() => '?')].join(', ');
+    db.prepare(
+      `INSERT INTO body_measurements (${colList}) VALUES (${placeholders})`
+    ).run(req.userId, date, ...MEASUREMENT_COLS.map((c) => merged[c]));
+  }
+
+  const cols = ['date', ...MEASUREMENT_COLS].join(', ');
+  const row = db
+    .prepare(`SELECT ${cols} FROM body_measurements WHERE user_id = ? AND date = ?`)
+    .get(req.userId, date);
+  res.json(row);
+});
+
+// ===== Daily check-in (sleep + stress) =====
+
+app.get('/api/check-in', requireAuth, (req, res) => {
+  const date = req.query.date;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date query (YYYY-MM-DD) required' });
+  }
+  const row = db
+    .prepare('SELECT date, sleep_minutes, stress_level FROM daily_check_ins WHERE user_id = ? AND date = ?')
+    .get(req.userId, date);
+  res.json(row || { date, sleep_minutes: null, stress_level: null });
+});
+
+app.get('/api/check-ins', requireAuth, (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+  const rows = db
+    .prepare(
+      'SELECT date, sleep_minutes, stress_level FROM daily_check_ins WHERE user_id = ? AND date >= ? ORDER BY date ASC'
+    )
+    .all(req.userId, cutoffStr);
+  res.json(rows);
+});
+
+app.post('/api/check-in', requireAuth, (req, res) => {
+  const { date, sleep_minutes, stress_level } = req.body || {};
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'valid date required' });
+  }
+
+  const sleepProvided = sleep_minutes !== undefined && sleep_minutes !== null && sleep_minutes !== '';
+  const stressProvided = stress_level !== undefined && stress_level !== null && stress_level !== '';
+
+  let sleepVal = null, stressVal = null;
+  if (sleepProvided) {
+    sleepVal = Number(sleep_minutes);
+    if (!Number.isInteger(sleepVal) || sleepVal < 0 || sleepVal > 1440) {
+      return res.status(400).json({ error: 'sleep minutes must be 0-1440' });
+    }
+  }
+  if (stressProvided) {
+    stressVal = Number(stress_level);
+    if (!Number.isInteger(stressVal) || stressVal < 1 || stressVal > 10) {
+      return res.status(400).json({ error: 'stress level must be 1-10' });
+    }
+  }
+
+  if (!sleepProvided && !stressProvided) {
+    return res.status(400).json({ error: 'provide sleep or stress' });
+  }
+
+  const existing = db
+    .prepare('SELECT * FROM daily_check_ins WHERE user_id = ? AND date = ?')
+    .get(req.userId, date);
+
+  if (existing) {
+    const newSleep = sleepProvided ? sleepVal : existing.sleep_minutes;
+    const newStress = stressProvided ? stressVal : existing.stress_level;
+    if (newSleep === null && newStress === null) {
+      db.prepare('DELETE FROM daily_check_ins WHERE user_id = ? AND date = ?').run(req.userId, date);
+    } else {
+      db.prepare(
+        'UPDATE daily_check_ins SET sleep_minutes = ?, stress_level = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND date = ?'
+      ).run(newSleep, newStress, req.userId, date);
+    }
+  } else {
+    db.prepare(
+      'INSERT INTO daily_check_ins (user_id, date, sleep_minutes, stress_level) VALUES (?, ?, ?, ?)'
+    ).run(req.userId, date, sleepVal, stressVal);
+  }
+
+  const row = db
+    .prepare('SELECT date, sleep_minutes, stress_level FROM daily_check_ins WHERE user_id = ? AND date = ?')
+    .get(req.userId, date);
   res.json(row);
 });
 

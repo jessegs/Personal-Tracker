@@ -191,6 +191,8 @@ datePicker.addEventListener('change', () => {
   loadEntries();
   syncWeightInput();
   loadWater();
+  loadCheckIn();
+  loadMeasurements();
 });
 $('prev-day').addEventListener('click', () => shiftDate(-1));
 $('next-day').addEventListener('click', () => shiftDate(1));
@@ -203,6 +205,8 @@ function shiftDate(delta) {
   loadEntries();
   syncWeightInput();
   loadWater();
+  loadCheckIn();
+  loadMeasurements();
 }
 
 // ==== Status helper ====
@@ -1417,6 +1421,500 @@ async function composeShareImage({ date, photoUrl, totals, goals, weight }) {
   });
 }
 
+// ==== Body Measurements ====
+const MEASUREMENT_FIELDS = [
+  { key: 'neck',        label: 'Neck',     color: '#4cc9ff' },
+  { key: 'shoulders',   label: 'Shoulders',color: '#7c5cff' },
+  { key: 'left_bicep',  label: 'L. Bicep', color: '#4dd6a8' },
+  { key: 'right_bicep', label: 'R. Bicep', color: '#2ec4b6' },
+  { key: 'chest',       label: 'Chest',    color: '#ff8a4c' },
+  { key: 'waist',       label: 'Waist',    color: '#ff5c8a' },
+  { key: 'left_thigh',  label: 'L. Thigh', color: '#ffc857' },
+  { key: 'right_thigh', label: 'R. Thigh', color: '#ff9d6b' },
+];
+
+let currentMeasurement = {};
+let currentMeasurements = [];
+const measurementsStatus = $('measurements-status');
+
+$('measurements-log-btn').addEventListener('click', logMeasurements);
+
+async function loadMeasurements() {
+  try {
+    const [oneRes, listRes] = await Promise.all([
+      fetch(`/api/measurement?date=${datePicker.value}`),
+      fetch('/api/measurements?days=30'),
+    ]);
+    currentMeasurement = await oneRes.json();
+    currentMeasurements = await listRes.json();
+    syncMeasurementInputs();
+    renderMeasurementsChart();
+  } catch (err) {
+    console.error('Failed to load measurements', err);
+  }
+}
+
+function syncMeasurementInputs() {
+  for (const f of MEASUREMENT_FIELDS) {
+    const el = $(`m-${f.key}`);
+    if (!el) continue;
+    el.value = currentMeasurement[f.key] != null ? currentMeasurement[f.key] : '';
+  }
+}
+
+async function logMeasurements() {
+  const payload = { date: datePicker.value };
+  let any = false;
+  for (const f of MEASUREMENT_FIELDS) {
+    const v = $(`m-${f.key}`).value.trim();
+    if (v === '') continue;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) {
+      setStatus(measurementsStatus, `${f.label} must be a positive number`, 'error');
+      return;
+    }
+    payload[f.key] = n;
+    any = true;
+  }
+  if (!any) {
+    setStatus(measurementsStatus, 'Enter at least one measurement', 'error');
+    return;
+  }
+  try {
+    const res = await fetch('/api/measurement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    currentMeasurement = data;
+    syncMeasurementInputs();
+    setStatus(measurementsStatus, 'Logged', 'success');
+    loadMeasurements();
+  } catch (err) {
+    setStatus(measurementsStatus, err.message, 'error');
+  }
+}
+
+function renderMeasurementsChart() {
+  const svg = $('measurements-chart');
+  const empty = $('measurements-empty');
+  svg.innerHTML = '';
+
+  // Build per-field maps date -> value
+  const maps = {};
+  let anyData = false;
+  for (const f of MEASUREMENT_FIELDS) {
+    const m = new Map(
+      currentMeasurements
+        .filter((row) => row[f.key] != null)
+        .map((row) => [row.date, row[f.key]])
+    );
+    maps[f.key] = m;
+    if (m.size > 0) anyData = true;
+  }
+
+  if (!anyData) {
+    empty.hidden = false;
+    svg.style.display = 'none';
+    return;
+  }
+  empty.hidden = true;
+  svg.style.display = 'block';
+
+  const days = 30;
+  const today = new Date();
+  const dayStrings = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    dayStrings.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    );
+  }
+
+  // Y-range across all fields
+  const allValues = [];
+  for (const f of MEASUREMENT_FIELDS) {
+    for (const v of maps[f.key].values()) allValues.push(v);
+  }
+  let yMin = Math.min(...allValues);
+  let yMax = Math.max(...allValues);
+  if (yMin === yMax) {
+    yMin -= 1;
+    yMax += 1;
+  } else {
+    const pad = (yMax - yMin) * 0.15;
+    yMin -= pad;
+    yMax += pad;
+  }
+
+  const W = 600, H = 240;
+  const PAD = { top: 56, right: 50, bottom: 30, left: 50 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+  const xAt = (i) => PAD.left + (i / (days - 1)) * innerW;
+  const yAt = (v) => PAD.top + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const make = (tag, attrs, parent = svg, text) => {
+    const el = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    if (text != null) el.textContent = text;
+    parent.appendChild(el);
+    return el;
+  };
+
+  // Y-axis grid + labels (in inches)
+  const yTicks = 4;
+  for (let i = 0; i <= yTicks; i++) {
+    const v = yMin + ((yMax - yMin) * i) / yTicks;
+    const yp = yAt(v);
+    make('line', {
+      x1: PAD.left, x2: W - PAD.right, y1: yp, y2: yp,
+      stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 1,
+    });
+    make(
+      'text',
+      { x: PAD.left - 8, y: yp + 4, fill: '#c5cad6', 'font-size': 11, 'text-anchor': 'end', 'font-weight': 500 },
+      svg, `${v.toFixed(1)}"`
+    );
+  }
+
+  // X-axis labels
+  const labelIdx = [0, Math.floor(days / 2), days - 1];
+  for (const i of labelIdx) {
+    const [, m, d] = dayStrings[i].split('-');
+    make(
+      'text',
+      { x: xAt(i), y: H - PAD.bottom + 18, fill: '#7a8093', 'font-size': 11, 'text-anchor': 'middle', 'font-weight': 500 },
+      svg, `${parseInt(m, 10)}/${parseInt(d, 10)}`
+    );
+  }
+
+  // Legend (4 columns over 2 rows above the plot)
+  const legendCols = 4;
+  const legendItemW = (W - PAD.left - PAD.right) / legendCols;
+  for (let idx = 0; idx < MEASUREMENT_FIELDS.length; idx++) {
+    const f = MEASUREMENT_FIELDS[idx];
+    if (maps[f.key].size === 0) continue;
+    const col = idx % legendCols;
+    const row = Math.floor(idx / legendCols);
+    const lx = PAD.left + col * legendItemW;
+    const ly = 14 + row * 18;
+    make('rect', { x: lx, y: ly - 6, width: 14, height: 3, fill: f.color, rx: 1.5 });
+    make(
+      'text',
+      { x: lx + 20, y: ly + 4, fill: '#c5cad6', 'font-size': 10, 'font-weight': 700, 'letter-spacing': '0.06em' },
+      svg, f.label.toUpperCase()
+    );
+  }
+
+  // Lines + dots per field
+  for (const f of MEASUREMENT_FIELDS) {
+    const m = maps[f.key];
+    if (m.size === 0) continue;
+    const pts = [];
+    for (let i = 0; i < days; i++) {
+      if (m.has(dayStrings[i])) pts.push({ i, v: m.get(dayStrings[i]) });
+    }
+    if (pts.length > 1) {
+      const path = pts
+        .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${xAt(p.i)} ${yAt(p.v)}`)
+        .join(' ');
+      make('path', {
+        d: path, fill: 'none', stroke: f.color, 'stroke-width': 2,
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: '0.9',
+      });
+    }
+    for (const p of pts) {
+      make('circle', {
+        cx: xAt(p.i), cy: yAt(p.v), r: 3.5,
+        fill: '#0a0c10', stroke: f.color, 'stroke-width': 1.8,
+      });
+    }
+  }
+}
+
+// ==== Daily check-in (sleep + stress) ====
+let currentCheckIn = { sleep_minutes: null, stress_level: null };
+let currentCheckIns = [];
+const checkInStatus = $('check-in-status');
+
+$('check-in-log-btn').addEventListener('click', logCheckIn);
+
+async function loadCheckIn() {
+  try {
+    const [oneRes, listRes] = await Promise.all([
+      fetch(`/api/check-in?date=${datePicker.value}`),
+      fetch('/api/check-ins?days=30'),
+    ]);
+    const data = await oneRes.json();
+    currentCheckIn = data;
+    currentCheckIns = await listRes.json();
+    syncCheckInInputs();
+    renderCheckInChart();
+  } catch (err) {
+    console.error('Failed to load check-in', err);
+  }
+}
+
+function syncCheckInInputs() {
+  const mins = currentCheckIn.sleep_minutes;
+  if (mins != null) {
+    $('sleep-hours').value = Math.floor(mins / 60);
+    $('sleep-minutes').value = String(mins % 60).padStart(2, '0');
+  } else {
+    $('sleep-hours').value = '';
+    $('sleep-minutes').value = '';
+  }
+  $('stress-level').value =
+    currentCheckIn.stress_level != null ? currentCheckIn.stress_level : '';
+}
+
+function readSleepMinutes() {
+  const hStr = $('sleep-hours').value.trim();
+  const mStr = $('sleep-minutes').value.trim();
+  if (hStr === '' && mStr === '') return null;
+  const h = Number(hStr) || 0;
+  const m = Number(mStr) || 0;
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN;
+  if (h < 0 || h > 24 || m < 0 || m > 59) return NaN;
+  return h * 60 + m;
+}
+
+async function logCheckIn() {
+  const sleepMins = readSleepMinutes();
+  const stressRaw = $('stress-level').value;
+  const stress = stressRaw === '' ? null : Number(stressRaw);
+
+  if (Number.isNaN(sleepMins)) {
+    setStatus(checkInStatus, 'Sleep must be 0–24h, 0–59m', 'error');
+    return;
+  }
+  if (sleepMins === null && stress === null) {
+    setStatus(checkInStatus, 'Enter sleep or stress', 'error');
+    return;
+  }
+  if (stress !== null && (!Number.isInteger(stress) || stress < 1 || stress > 10)) {
+    setStatus(checkInStatus, 'Stress must be 1-10', 'error');
+    return;
+  }
+
+  const payload = { date: datePicker.value };
+  if (sleepMins !== null) payload.sleep_minutes = sleepMins;
+  if (stress !== null) payload.stress_level = stress;
+
+  try {
+    const res = await fetch('/api/check-in', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    currentCheckIn = data;
+    syncCheckInInputs();
+    setStatus(checkInStatus, 'Logged', 'success');
+    // Refresh chart with new data
+    loadCheckIn();
+  } catch (err) {
+    setStatus(checkInStatus, err.message, 'error');
+  }
+}
+
+function renderCheckInChart() {
+  const svg = $('check-in-chart');
+  const empty = $('check-in-empty');
+  svg.innerHTML = '';
+
+  const days = 30;
+  const dayStrings = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    dayStrings.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    );
+  }
+
+  const sleepMap = new Map(
+    currentCheckIns.filter((c) => c.sleep_minutes != null).map((c) => [c.date, c.sleep_minutes])
+  );
+  const stressMap = new Map(
+    currentCheckIns.filter((c) => c.stress_level != null).map((c) => [c.date, c.stress_level])
+  );
+
+  const computeRange = (vals, defaultPad) => {
+    if (vals.length === 0) return null;
+    if (vals.length === 1) return [vals[0] - defaultPad, vals[0] + defaultPad];
+    let mn = Math.min(...vals), mx = Math.max(...vals);
+    if (mn === mx) return [mn - defaultPad, mx + defaultPad];
+    const pad = (mx - mn) * 0.15;
+    return [mn - pad, mx + pad];
+  };
+
+  const sleepRange = computeRange([...sleepMap.values()], 30);
+  // Stress always uses fixed 0-10 scale for legibility
+  const stressRange = stressMap.size > 0 ? [0, 10.5] : null;
+
+  if (!sleepRange && !stressRange) {
+    empty.hidden = false;
+    svg.style.display = 'none';
+    return;
+  }
+  empty.hidden = true;
+  svg.style.display = 'block';
+
+  const W = 600, H = 220;
+  const PAD = { top: 30, right: 50, bottom: 30, left: 50 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+  const xAt = (i) => PAD.left + (i / (days - 1)) * innerW;
+
+  const yAtSleep = (v) => {
+    const [mn, mx] = sleepRange;
+    return PAD.top + (1 - (v - mn) / (mx - mn)) * innerH;
+  };
+  const yAtStress = (v) => {
+    const [mn, mx] = stressRange;
+    return PAD.top + (1 - (v - mn) / (mx - mn)) * innerH;
+  };
+
+  const STRESS_COLOR = '#ff9d6b';
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const make = (tag, attrs, parent = svg, text) => {
+    const el = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    if (text != null) el.textContent = text;
+    parent.appendChild(el);
+    return el;
+  };
+
+  const defs = make('defs', {});
+  const grad = make(
+    'linearGradient',
+    { id: 'sleepGradient', x1: '0', y1: '0', x2: '1', y2: '0' },
+    defs
+  );
+  make('stop', { offset: '0%', 'stop-color': '#7c5cff' }, grad);
+  make('stop', { offset: '100%', 'stop-color': '#4cc9ff' }, grad);
+
+  const yTicks = 4;
+  for (let i = 0; i <= yTicks; i++) {
+    const frac = i / yTicks;
+    if (sleepRange) {
+      const v = sleepRange[0] + (sleepRange[1] - sleepRange[0]) * frac;
+      const yp = yAtSleep(v);
+      make('line', {
+        x1: PAD.left, x2: W - PAD.right, y1: yp, y2: yp,
+        stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 1,
+      });
+      const hours = (v / 60).toFixed(1);
+      make(
+        'text',
+        { x: PAD.left - 8, y: yp + 4, fill: '#c5cad6', 'font-size': 11, 'text-anchor': 'end', 'font-weight': 500 },
+        svg, `${hours}h`
+      );
+    } else if (stressRange) {
+      const v = stressRange[0] + (stressRange[1] - stressRange[0]) * frac;
+      const yp = yAtStress(v);
+      make('line', {
+        x1: PAD.left, x2: W - PAD.right, y1: yp, y2: yp,
+        stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 1,
+      });
+    }
+
+    if (stressRange) {
+      const v = stressRange[0] + (stressRange[1] - stressRange[0]) * frac;
+      const ypStress = yAtStress(v);
+      make(
+        'text',
+        { x: W - PAD.right + 8, y: ypStress + 4, fill: STRESS_COLOR, 'font-size': 11, 'text-anchor': 'start', 'font-weight': 600 },
+        svg, v.toFixed(0)
+      );
+    }
+  }
+
+  const labelIdx = [0, Math.floor(days / 2), days - 1];
+  for (const i of labelIdx) {
+    const [, m, d] = dayStrings[i].split('-');
+    make(
+      'text',
+      { x: xAt(i), y: H - PAD.bottom + 18, fill: '#7a8093', 'font-size': 11, 'text-anchor': 'middle', 'font-weight': 500 },
+      svg, `${parseInt(m, 10)}/${parseInt(d, 10)}`
+    );
+  }
+
+  // Legend
+  let legendX = PAD.left;
+  const legendY = 14;
+  if (sleepMap.size > 0) {
+    make('rect', { x: legendX, y: legendY - 6, width: 16, height: 3, fill: 'url(#sleepGradient)', rx: 1.5 });
+    make(
+      'text',
+      { x: legendX + 22, y: legendY + 4, fill: '#c5cad6', 'font-size': 10, 'font-weight': 700, 'letter-spacing': '0.08em' },
+      svg, 'SLEEP'
+    );
+    legendX += 80;
+  }
+  if (stressMap.size > 0) {
+    make('rect', { x: legendX, y: legendY - 6, width: 16, height: 3, fill: STRESS_COLOR, rx: 1.5 });
+    make(
+      'text',
+      { x: legendX + 22, y: legendY + 4, fill: '#c5cad6', 'font-size': 10, 'font-weight': 700, 'letter-spacing': '0.08em' },
+      svg, 'STRESS'
+    );
+  }
+
+  // Sleep line + dots
+  if (sleepRange) {
+    const sleepPts = [];
+    for (let i = 0; i < days; i++) {
+      if (sleepMap.has(dayStrings[i])) sleepPts.push({ i, v: sleepMap.get(dayStrings[i]) });
+    }
+    if (sleepPts.length > 1) {
+      const path = sleepPts
+        .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${xAt(p.i)} ${yAtSleep(p.v)}`)
+        .join(' ');
+      make('path', {
+        d: path, fill: 'none', stroke: 'url(#sleepGradient)',
+        'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      });
+    }
+    for (const p of sleepPts) {
+      make('circle', {
+        cx: xAt(p.i), cy: yAtSleep(p.v), r: 4,
+        fill: '#0a0c10', stroke: 'url(#sleepGradient)', 'stroke-width': 2,
+      });
+    }
+  }
+
+  // Stress line + dots
+  if (stressRange) {
+    const stressPts = [];
+    for (let i = 0; i < days; i++) {
+      if (stressMap.has(dayStrings[i])) stressPts.push({ i, v: stressMap.get(dayStrings[i]) });
+    }
+    if (stressPts.length > 1) {
+      const path = stressPts
+        .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${xAt(p.i)} ${yAtStress(p.v)}`)
+        .join(' ');
+      make('path', {
+        d: path, fill: 'none', stroke: STRESS_COLOR,
+        'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      });
+    }
+    for (const p of stressPts) {
+      make('circle', {
+        cx: xAt(p.i), cy: yAtStress(p.v), r: 4,
+        fill: '#0a0c10', stroke: STRESS_COLOR, 'stroke-width': 2,
+      });
+    }
+  }
+}
+
 // ==== Habits ====
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1644,6 +2142,8 @@ function enterApp() {
     loadWeights();
     loadWater();
   });
+  loadCheckIn();
+  loadMeasurements();
 }
 
 (async () => {
