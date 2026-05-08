@@ -211,6 +211,21 @@ if (!colExists('goals', 'user_id')) {
 }
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS meal_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    calories REAL NOT NULL DEFAULT 0,
+    protein REAL NOT NULL DEFAULT 0,
+    carbs REAL NOT NULL DEFAULT 0,
+    fat REAL NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_meal_templates_user ON meal_templates(user_id);
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS body_measurements (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     date TEXT NOT NULL,
@@ -758,6 +773,78 @@ app.post('/api/goals', requireAuth, (req, res) => {
     nullableNum(b.goal_body_fat)
   );
   const row = db.prepare('SELECT * FROM goals WHERE user_id = ?').get(req.userId);
+  res.json(row);
+});
+
+// ===== Meal templates (reusable quick meals) =====
+
+app.get('/api/meal-templates', requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT id, name, calories, protein, carbs, fat, created_at, last_used_at
+       FROM meal_templates
+       WHERE user_id = ?
+       ORDER BY COALESCE(last_used_at, created_at) DESC`
+    )
+    .all(req.userId);
+  res.json(rows);
+});
+
+app.post('/api/meal-templates', requireAuth, (req, res) => {
+  const { name, calories, protein, carbs, fat } = req.body || {};
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'name required' });
+  }
+  const cal = Number(calories) || 0;
+  const p = Number(protein) || 0;
+  const c = Number(carbs) || 0;
+  const f = Number(fat) || 0;
+  if (cal === 0 && p === 0 && c === 0 && f === 0) {
+    return res.status(400).json({ error: 'at least one macro is required' });
+  }
+  const info = db
+    .prepare(
+      'INSERT INTO meal_templates (user_id, name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+    .run(req.userId, name.trim().slice(0, 200), cal, p, c, f);
+  const row = db
+    .prepare('SELECT * FROM meal_templates WHERE id = ? AND user_id = ?')
+    .get(info.lastInsertRowid, req.userId);
+  res.json(row);
+});
+
+app.delete('/api/meal-templates/:id', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  db.prepare('DELETE FROM meal_templates WHERE id = ? AND user_id = ?').run(id, req.userId);
+  res.json({ ok: true });
+});
+
+// One-click: log a template as an entry on a given date and bump last_used_at
+app.post('/api/meal-templates/:id/log', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const date = req.body && req.body.date;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'valid date required' });
+  }
+  const tpl = db
+    .prepare('SELECT * FROM meal_templates WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!tpl) return res.status(404).json({ error: 'template not found' });
+
+  const info = db
+    .prepare(
+      'INSERT INTO entries (user_id, date, description, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    )
+    .run(req.userId, date, tpl.name, tpl.calories, tpl.protein, tpl.carbs, tpl.fat);
+  db.prepare(
+    'UPDATE meal_templates SET last_used_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
+  ).run(id, req.userId);
+
+  const row = db
+    .prepare('SELECT * FROM entries WHERE id = ? AND user_id = ?')
+    .get(info.lastInsertRowid, req.userId);
   res.json(row);
 });
 

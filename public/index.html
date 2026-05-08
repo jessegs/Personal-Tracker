@@ -86,7 +86,11 @@
         </div>
       </div>
       <nav class="tabs">
-        <button class="tab active" data-tab="log">
+        <button class="tab active" data-tab="nutrition">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
+          Nutrition
+        </button>
+        <button class="tab" data-tab="log">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
           Daily Log
         </button>
@@ -109,188 +113,25 @@
     </header>
 
     <main>
+      <div class="date-bar" id="shared-date-bar">
+        <button id="prev-day" class="icon-btn" aria-label="Previous day">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <input type="date" id="date-picker" />
+        <button id="next-day" class="icon-btn" aria-label="Next day">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button id="share-btn" class="icon-btn share-btn" aria-label="Share progress" title="Share photo + macros">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+            <polyline points="16 6 12 2 8 6"/>
+            <line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+        </button>
+      </div>
+
       <!-- ===== Daily Log ===== -->
-      <section id="log-tab" class="tab-panel active">
-        <div class="date-bar">
-          <button id="prev-day" class="icon-btn" aria-label="Previous day">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <input type="date" id="date-picker" />
-          <button id="next-day" class="icon-btn" aria-label="Next day">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
-          <button id="share-btn" class="icon-btn share-btn" aria-label="Share progress" title="Share photo + macros">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-              <polyline points="16 6 12 2 8 6"/>
-              <line x1="12" y1="2" x2="12" y2="15"/>
-            </svg>
-          </button>
-        </div>
-
-        <div class="totals">
-          <div class="total-card cal">
-            <div class="ring-wrap">
-              <svg class="ring" viewBox="0 0 100 100">
-                <circle class="ring-bg" cx="50" cy="50" r="44" />
-                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
-              </svg>
-              <div class="ring-center">
-                <span class="ring-value" id="total-calories">0</span>
-                <span class="ring-unit">kcal</span>
-              </div>
-            </div>
-            <div class="card-meta">
-              <span class="label">Calories</span>
-              <span class="goal-text" id="goal-calories">no goal</span>
-            </div>
-          </div>
-          <div class="total-card protein">
-            <div class="ring-wrap">
-              <svg class="ring" viewBox="0 0 100 100">
-                <circle class="ring-bg" cx="50" cy="50" r="44" />
-                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
-              </svg>
-              <div class="ring-center">
-                <span class="ring-value" id="total-protein">0</span>
-                <span class="ring-unit">g</span>
-              </div>
-            </div>
-            <div class="card-meta">
-              <span class="label">Protein</span>
-              <span class="goal-text" id="goal-protein">no goal</span>
-            </div>
-          </div>
-          <div class="total-card carbs">
-            <div class="ring-wrap">
-              <svg class="ring" viewBox="0 0 100 100">
-                <circle class="ring-bg" cx="50" cy="50" r="44" />
-                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
-              </svg>
-              <div class="ring-center">
-                <span class="ring-value" id="total-carbs">0</span>
-                <span class="ring-unit">g</span>
-              </div>
-            </div>
-            <div class="card-meta">
-              <span class="label">Carbs</span>
-              <span class="goal-text" id="goal-carbs">no goal</span>
-            </div>
-          </div>
-          <div class="total-card fat">
-            <div class="ring-wrap">
-              <svg class="ring" viewBox="0 0 100 100">
-                <circle class="ring-bg" cx="50" cy="50" r="44" />
-                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
-              </svg>
-              <div class="ring-center">
-                <span class="ring-value" id="total-fat">0</span>
-                <span class="ring-unit">g</span>
-              </div>
-            </div>
-            <div class="card-meta">
-              <span class="label">Fat</span>
-              <span class="goal-text" id="goal-fat">no goal</span>
-            </div>
-          </div>
-          <div class="total-card water">
-            <div class="ring-wrap">
-              <svg class="ring" viewBox="0 0 100 100">
-                <circle class="ring-bg" cx="50" cy="50" r="44" />
-                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
-              </svg>
-              <div class="ring-center">
-                <span class="ring-value" id="total-water">0</span>
-                <span class="ring-unit">oz</span>
-              </div>
-            </div>
-            <div class="card-meta">
-              <span class="label">Water</span>
-              <span class="goal-text" id="goal-water">no goal</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="water-log-row">
-          <span class="water-log-label">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
-            </svg>
-            Quick log
-          </span>
-          <button class="water-quick-btn" data-amount="8" type="button">+8 oz</button>
-          <button class="water-quick-btn" data-amount="16" type="button">+16 oz</button>
-          <button class="water-quick-btn" data-amount="24" type="button">+24 oz</button>
-          <div class="water-custom-wrap">
-            <input type="number" id="water-custom" min="1" step="1" placeholder="Custom" />
-            <button id="water-custom-btn" class="water-quick-btn" type="button">Add</button>
-          </div>
-          <button id="water-reset-btn" class="water-reset-btn" type="button" title="Reset water for this day">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-            Reset
-          </button>
-        </div>
-
-        <div class="card add-food">
-          <div class="card-header">
-            <h2>Add food</h2>
-            <span class="badge ai">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
-              AI assist
-            </span>
-          </div>
-
-          <div class="ai-row">
-            <div class="input-wrap">
-              <svg class="input-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input
-                type="text"
-                id="food-description"
-                placeholder="e.g. 2 eggs and a slice of toast with butter"
-                autocomplete="off"
-              />
-            </div>
-            <button id="estimate-btn" type="button" class="btn-secondary">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
-              Estimate
-            </button>
-          </div>
-          <p class="hint">Describe what you ate and let AI fill in the macros, or enter them manually below.</p>
-
-          <div class="manual-row">
-            <label>
-              <span>Calories</span>
-              <input type="number" id="m-calories" min="0" step="1" placeholder="0" />
-            </label>
-            <label>
-              <span>Protein (g)</span>
-              <input type="number" id="m-protein" min="0" step="0.1" placeholder="0" />
-            </label>
-            <label>
-              <span>Carbs (g)</span>
-              <input type="number" id="m-carbs" min="0" step="0.1" placeholder="0" />
-            </label>
-            <label>
-              <span>Fat (g)</span>
-              <input type="number" id="m-fat" min="0" step="0.1" placeholder="0" />
-            </label>
-          </div>
-
-          <div class="actions">
-            <button id="add-btn" type="button" class="primary">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-              Add to log
-            </button>
-            <button id="clear-btn" type="button" class="btn-ghost">Clear</button>
-            <span id="status" class="status"></span>
-          </div>
-        </div>
-
-        <div class="section-header">
-          <h2>Today's entries</h2>
-        </div>
-        <ul id="entries-list" class="entries-list"></ul>
-
+      <section id="log-tab" class="tab-panel">
         <div class="card weight-card">
           <div class="card-header">
             <h2>Weight</h2>
@@ -445,6 +286,184 @@
             Goals
           </button>
         </div>
+      </section>
+
+      <!-- ===== Nutrition ===== -->
+      <section id="nutrition-tab" class="tab-panel active">
+        <div class="totals">
+          <div class="total-card cal">
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 100 100">
+                <circle class="ring-bg" cx="50" cy="50" r="44" />
+                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
+              </svg>
+              <div class="ring-center">
+                <span class="ring-value" id="total-calories">0</span>
+                <span class="ring-unit">kcal</span>
+              </div>
+            </div>
+            <div class="card-meta">
+              <span class="label">Calories</span>
+              <span class="goal-text" id="goal-calories">no goal</span>
+            </div>
+          </div>
+          <div class="total-card protein">
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 100 100">
+                <circle class="ring-bg" cx="50" cy="50" r="44" />
+                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
+              </svg>
+              <div class="ring-center">
+                <span class="ring-value" id="total-protein">0</span>
+                <span class="ring-unit">g</span>
+              </div>
+            </div>
+            <div class="card-meta">
+              <span class="label">Protein</span>
+              <span class="goal-text" id="goal-protein">no goal</span>
+            </div>
+          </div>
+          <div class="total-card carbs">
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 100 100">
+                <circle class="ring-bg" cx="50" cy="50" r="44" />
+                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
+              </svg>
+              <div class="ring-center">
+                <span class="ring-value" id="total-carbs">0</span>
+                <span class="ring-unit">g</span>
+              </div>
+            </div>
+            <div class="card-meta">
+              <span class="label">Carbs</span>
+              <span class="goal-text" id="goal-carbs">no goal</span>
+            </div>
+          </div>
+          <div class="total-card fat">
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 100 100">
+                <circle class="ring-bg" cx="50" cy="50" r="44" />
+                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
+              </svg>
+              <div class="ring-center">
+                <span class="ring-value" id="total-fat">0</span>
+                <span class="ring-unit">g</span>
+              </div>
+            </div>
+            <div class="card-meta">
+              <span class="label">Fat</span>
+              <span class="goal-text" id="goal-fat">no goal</span>
+            </div>
+          </div>
+          <div class="total-card water">
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 100 100">
+                <circle class="ring-bg" cx="50" cy="50" r="44" />
+                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
+              </svg>
+              <div class="ring-center">
+                <span class="ring-value" id="total-water">0</span>
+                <span class="ring-unit">oz</span>
+              </div>
+            </div>
+            <div class="card-meta">
+              <span class="label">Water</span>
+              <span class="goal-text" id="goal-water">no goal</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="water-log-row">
+          <span class="water-log-label">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+            </svg>
+            Quick log
+          </span>
+          <button class="water-quick-btn" data-amount="8" type="button">+8 oz</button>
+          <button class="water-quick-btn" data-amount="16" type="button">+16 oz</button>
+          <button class="water-quick-btn" data-amount="24" type="button">+24 oz</button>
+          <div class="water-custom-wrap">
+            <input type="number" id="water-custom" min="1" step="1" placeholder="Custom" />
+            <button id="water-custom-btn" class="water-quick-btn" type="button">Add</button>
+          </div>
+          <button id="water-reset-btn" class="water-reset-btn" type="button" title="Reset water for this day">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            Reset
+          </button>
+        </div>
+
+        <div class="card add-food">
+          <div class="card-header">
+            <h2>Add food</h2>
+            <span class="badge ai">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
+              AI assist
+            </span>
+          </div>
+
+          <div id="quick-meals" class="quick-meals" hidden>
+            <div class="quick-meals-label">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Quick meals
+            </div>
+            <div id="quick-meals-list" class="quick-meals-list"></div>
+          </div>
+
+          <div class="ai-row">
+            <div class="input-wrap">
+              <svg class="input-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input
+                type="text"
+                id="food-description"
+                placeholder="e.g. 2 eggs and a slice of toast with butter"
+                autocomplete="off"
+              />
+            </div>
+            <button id="estimate-btn" type="button" class="btn-secondary">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
+              Estimate
+            </button>
+          </div>
+          <p class="hint">Describe what you ate and let AI fill in the macros, or enter them manually below.</p>
+
+          <div class="manual-row">
+            <label>
+              <span>Calories</span>
+              <input type="number" id="m-calories" min="0" step="1" placeholder="0" />
+            </label>
+            <label>
+              <span>Protein (g)</span>
+              <input type="number" id="m-protein" min="0" step="0.1" placeholder="0" />
+            </label>
+            <label>
+              <span>Carbs (g)</span>
+              <input type="number" id="m-carbs" min="0" step="0.1" placeholder="0" />
+            </label>
+            <label>
+              <span>Fat (g)</span>
+              <input type="number" id="m-fat" min="0" step="0.1" placeholder="0" />
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="add-btn" type="button" class="primary">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Add to log
+            </button>
+            <button id="save-template-btn" type="button" class="btn-secondary" title="Save current entry as a reusable quick meal">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              Save as quick meal
+            </button>
+            <button id="clear-btn" type="button" class="btn-ghost">Clear</button>
+            <span id="status" class="status"></span>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <h2>Today's entries</h2>
+        </div>
+        <ul id="entries-list" class="entries-list"></ul>
       </section>
 
       <!-- ===== Habits ===== -->

@@ -171,12 +171,21 @@ const fmt = (n) => {
 };
 
 // ==== Tab switching ====
+const TABS_WITH_DATE = new Set(['log', 'nutrition']);
+
+function applyDateBarVisibility(tabName) {
+  const bar = $('shared-date-bar');
+  if (!bar) return;
+  bar.hidden = !TABS_WITH_DATE.has(tabName);
+}
+
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
     btn.classList.add('active');
     $(`${btn.dataset.tab}-tab`).classList.add('active');
+    applyDateBarVisibility(btn.dataset.tab);
     if (btn.dataset.tab === 'photos') loadPhotos();
     if (btn.dataset.tab === 'habits') loadHabits();
   });
@@ -258,6 +267,7 @@ estimateBtn.addEventListener('click', async () => {
 // ==== Add entry ====
 $('add-btn').addEventListener('click', addEntry);
 $('clear-btn').addEventListener('click', clearForm);
+$('save-template-btn').addEventListener('click', saveAsTemplate);
 
 async function addEntry() {
   const description = $('food-description').value.trim();
@@ -579,6 +589,124 @@ async function postWater(date, oz) {
     applyGoalsToCards();
   } catch (err) {
     console.error('Failed to log water', err);
+  }
+}
+
+// ==== Meal templates (quick meals) ====
+let currentMealTemplates = [];
+
+async function loadMealTemplates() {
+  try {
+    const res = await fetch('/api/meal-templates');
+    if (!res.ok) return;
+    currentMealTemplates = await res.json();
+    renderMealTemplates();
+  } catch (err) {
+    console.error('Failed to load meal templates', err);
+  }
+}
+
+function renderMealTemplates() {
+  const wrap = $('quick-meals');
+  const list = $('quick-meals-list');
+  list.innerHTML = '';
+
+  if (currentMealTemplates.length === 0) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+
+  for (const t of currentMealTemplates) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'quick-meal-chip';
+    chip.title = `${t.name} · ${Math.round(t.calories)} kcal · P${fmt(t.protein)} C${fmt(t.carbs)} F${fmt(t.fat)}`;
+
+    const name = document.createElement('span');
+    name.className = 'meal-name';
+    name.textContent = t.name;
+
+    const cal = document.createElement('span');
+    cal.className = 'meal-cal';
+    cal.textContent = `${Math.round(t.calories)} kcal`;
+
+    chip.appendChild(name);
+    chip.appendChild(cal);
+
+    chip.addEventListener('click', () => logMealTemplate(t.id));
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'quick-meal-delete';
+    del.title = `Delete "${t.name}"`;
+    del.innerHTML =
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteMealTemplate(t.id, t.name);
+    });
+
+    chip.appendChild(del);
+    list.appendChild(chip);
+  }
+}
+
+async function saveAsTemplate() {
+  const description = $('food-description').value.trim();
+  const calories = parseFloat($('m-calories').value) || 0;
+  const protein = parseFloat($('m-protein').value) || 0;
+  const carbs = parseFloat($('m-carbs').value) || 0;
+  const fat = parseFloat($('m-fat').value) || 0;
+
+  if (!description) {
+    setStatus(status, 'Enter a name in the description field first', 'error');
+    return;
+  }
+  if (calories === 0 && protein === 0 && carbs === 0 && fat === 0) {
+    setStatus(status, 'Enter macros (or use AI estimate) before saving', 'error');
+    return;
+  }
+  try {
+    const res = await fetch('/api/meal-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: description, calories, protein, carbs, fat }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    setStatus(status, 'Saved as quick meal', 'success');
+    loadMealTemplates();
+  } catch (err) {
+    setStatus(status, err.message, 'error');
+  }
+}
+
+async function logMealTemplate(id) {
+  try {
+    const res = await fetch(`/api/meal-templates/${id}/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: datePicker.value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    setStatus(status, `Added "${data.description}"`, 'success');
+    loadEntries();
+    // Refresh templates so the just-used one bubbles to the top via last_used_at
+    loadMealTemplates();
+  } catch (err) {
+    setStatus(status, err.message, 'error');
+  }
+}
+
+async function deleteMealTemplate(id, name) {
+  if (!confirm(`Delete quick meal "${name}"?`)) return;
+  try {
+    await fetch(`/api/meal-templates/${id}`, { method: 'DELETE' });
+    loadMealTemplates();
+  } catch (err) {
+    console.error('Failed to delete template', err);
   }
 }
 
@@ -2144,6 +2272,7 @@ function enterApp() {
   });
   loadCheckIn();
   loadMeasurements();
+  loadMealTemplates();
 }
 
 (async () => {

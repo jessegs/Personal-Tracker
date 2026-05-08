@@ -365,8 +365,6 @@ body {
   background: rgba(10, 12, 16, 0.6);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  position: sticky;
-  top: 0;
 }
 
 .brand {
@@ -789,6 +787,102 @@ h2 {
 /* =================================================================
    Add food card
    ================================================================= */
+
+.quick-meals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.quick-meals[hidden] {
+  display: none;
+}
+
+.quick-meals-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.quick-meals-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-meal-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 32px 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 0.18s var(--ease);
+}
+
+.quick-meal-chip:hover {
+  background: rgba(124, 92, 255, 0.12);
+  border-color: rgba(124, 92, 255, 0.4);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.quick-meal-chip:active {
+  transform: translateY(0);
+}
+
+.quick-meal-chip .meal-name {
+  font-weight: 600;
+}
+
+.quick-meal-chip .meal-cal {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  font-feature-settings: 'tnum';
+}
+
+.quick-meal-chip:hover .meal-cal {
+  color: var(--text-soft);
+}
+
+.quick-meal-delete {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: all 0.18s var(--ease);
+}
+
+.quick-meal-delete:hover {
+  background: var(--danger);
+  color: white;
+}
 
 .ai-row {
   display: flex;
