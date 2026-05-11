@@ -917,7 +917,8 @@ $('goals-save-btn').addEventListener('click', saveGoals);
 
 // Goals modal
 const goalsModal = $('goals-modal');
-$('open-goals-btn').addEventListener('click', openGoalsModal);
+$('open-goals-btn').addEventListener('click', () => openGoalsModal('body'));
+$('open-goals-btn-nutrition').addEventListener('click', () => openGoalsModal('nutrition'));
 $('goals-modal-close').addEventListener('click', closeGoalsModal);
 $('goals-modal-cancel').addEventListener('click', closeGoalsModal);
 
@@ -929,8 +930,16 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !goalsModal.hidden) closeGoalsModal();
 });
 
-function openGoalsModal() {
+function openGoalsModal(mode = 'all') {
   renderGoalForm();
+  const showNutrition = mode === 'all' || mode === 'nutrition';
+  const showBody = mode === 'all' || mode === 'body';
+  $('goals-section-nutrition').hidden = !showNutrition;
+  $('goals-section-body').hidden = !showBody;
+  $('goals-modal-title').textContent =
+    mode === 'nutrition' ? 'Nutrition goals' :
+    mode === 'body' ? 'Body composition goals' :
+    'Goals';
   goalsModal.hidden = false;
 }
 
