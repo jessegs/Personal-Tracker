@@ -188,6 +188,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
     applyDateBarVisibility(btn.dataset.tab);
     if (btn.dataset.tab === 'photos') loadPhotos();
     if (btn.dataset.tab === 'habits') loadHabits();
+    if (btn.dataset.tab === 'admin') loadAdminUsers();
   });
 });
 
@@ -2378,11 +2379,137 @@ async function deleteHabit(id, name) {
   }
 }
 
+// ==== Admin ====
+
+async function loadAdminUsers() {
+  try {
+    const res = await fetch('/api/admin/users');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to load users');
+    }
+    const users = await res.json();
+    renderAdminUsers(users);
+  } catch (err) {
+    console.error('Failed to load admin users', err);
+  }
+}
+
+function renderAdminUsers(users) {
+  const list = $('admin-users-list');
+  list.innerHTML = '';
+  $('admin-user-count').textContent = `${users.length} user${users.length === 1 ? '' : 's'}`;
+
+  if (users.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = 'No users.';
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const u of users) {
+    const li = document.createElement('li');
+    li.className = 'admin-user-row';
+    if (currentUser && u.id === currentUser.id) li.classList.add('self');
+
+    const main = document.createElement('div');
+    main.className = 'admin-user-main';
+
+    const name = document.createElement('div');
+    name.className = 'admin-user-name';
+    name.textContent = u.username;
+    if (currentUser && u.id === currentUser.id) {
+      const tag = document.createElement('span');
+      tag.className = 'you-badge';
+      tag.textContent = 'You';
+      name.appendChild(tag);
+    }
+    if (u.is_admin) {
+      const tag = document.createElement('span');
+      tag.className = 'admin-badge';
+      tag.textContent = 'Admin';
+      name.appendChild(tag);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'admin-user-meta';
+    const createdDate = u.created_at ? new Date(u.created_at + 'Z') : null;
+    const created = createdDate
+      ? createdDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      : 'unknown';
+    const last = u.last_entry_at
+      ? new Date(u.last_entry_at + 'Z').toLocaleDateString(undefined, {
+          year: 'numeric', month: 'short', day: 'numeric',
+        })
+      : '—';
+    meta.innerHTML = `<span>Joined ${created}</span><span>Last entry ${last}</span><span>ID ${u.id}</span>`;
+
+    main.appendChild(name);
+    main.appendChild(meta);
+
+    const stats = document.createElement('div');
+    stats.className = 'admin-stats';
+    const statItems = [
+      ['Entries', u.entries_count],
+      ['Photos', u.photos_count],
+      ['Weights', u.weights_count],
+      ['Habits', u.habits_count],
+    ];
+    for (const [label, count] of statItems) {
+      const wrap = document.createElement('div');
+      const num = document.createElement('span');
+      num.textContent = count;
+      const lbl = document.createElement('span');
+      lbl.className = 'stat-label';
+      lbl.textContent = label;
+      wrap.appendChild(num);
+      wrap.appendChild(lbl);
+      stats.appendChild(wrap);
+    }
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'admin-delete';
+    del.title = 'Delete user';
+    del.innerHTML =
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    if (currentUser && u.id === currentUser.id) {
+      del.disabled = true;
+      del.title = "You can't delete your own admin account";
+    } else {
+      del.addEventListener('click', () => deleteAdminUser(u.id, u.username));
+    }
+
+    li.appendChild(main);
+    li.appendChild(stats);
+    li.appendChild(del);
+    list.appendChild(li);
+  }
+}
+
+async function deleteAdminUser(id, username) {
+  const msg = `Delete user "${username}" (id ${id})?\n\nThis permanently removes all their:\n• Food entries\n• Photos (files + records)\n• Weights & body measurements\n• Water & lifestyle logs\n• Habits & completions\n• Goals & meal templates\n• Sessions (they'll be logged out)\n\nThis cannot be undone.`;
+  if (!confirm(msg)) return;
+  try {
+    const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    loadAdminUsers();
+  } catch (err) {
+    alert('Failed to delete user: ' + err.message);
+  }
+}
+
 // ==== Init ====
 
 function enterApp() {
   if (currentUser) {
     $('user-name').textContent = currentUser.username;
+    // Show admin-only UI if this user has the flag
+    document.querySelectorAll('.admin-only').forEach((el) => {
+      el.hidden = !currentUser.is_admin;
+    });
   }
   appInitialized = true;
   loadEntries();

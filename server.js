@@ -121,6 +121,10 @@ function colExists(table, col) {
     .get(col).c > 0;
 }
 
+if (!colExists('users', 'is_admin')) {
+  db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0');
+}
+
 if (!colExists('entries', 'user_id')) {
   db.exec('ALTER TABLE entries ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE');
   db.exec('CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries(user_id, date)');
@@ -360,6 +364,12 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function requireAdmin(req, res, next) {
+  const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.userId);
+  if (!row || !row.is_admin) return res.status(403).json({ error: 'admin only' });
+  next();
+}
+
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use((req, _res, next) => {
@@ -480,13 +490,59 @@ app.get('/api/auth/me', (req, res) => {
   const token = getRequestToken(req);
   const session = getSession(token);
   if (!session) return res.status(401).json({ error: 'unauthorized' });
-  const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(session.user_id);
+  const user = db
+    .prepare('SELECT id, username, is_admin FROM users WHERE id = ?')
+    .get(session.user_id);
   if (!user) {
     deleteSession(token);
     clearSessionCookie(res);
     return res.status(401).json({ error: 'unauthorized' });
   }
-  res.json({ user });
+  res.json({ user: { id: user.id, username: user.username, is_admin: !!user.is_admin } });
+});
+
+// ===== Admin =====
+
+app.get('/api/admin/users', requireAuth, requireAdmin, (_req, res) => {
+  // For each user, summarize how much data they have
+  const rows = db.prepare(`
+    SELECT
+      u.id, u.username, u.is_admin, u.created_at,
+      (SELECT COUNT(*) FROM entries WHERE user_id = u.id)      AS entries_count,
+      (SELECT COUNT(*) FROM photos WHERE user_id = u.id)       AS photos_count,
+      (SELECT COUNT(*) FROM weights WHERE user_id = u.id)      AS weights_count,
+      (SELECT COUNT(*) FROM habits WHERE user_id = u.id)       AS habits_count,
+      (SELECT MAX(created_at) FROM entries WHERE user_id = u.id) AS last_entry_at
+    FROM users u
+    ORDER BY u.created_at ASC
+  `).all();
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      is_admin: !!r.is_admin,
+    }))
+  );
+});
+
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  if (id === req.userId) {
+    return res.status(400).json({ error: "you can't delete your own admin account" });
+  }
+  // Remove the user's photo files from disk before the DB cascade wipes the rows
+  const photos = db
+    .prepare('SELECT filename FROM photos WHERE user_id = ?')
+    .all(id);
+  for (const p of photos) {
+    const safe = basename(p.filename);
+    const fp = join(UPLOADS_DIR, safe);
+    if (existsSync(fp)) {
+      try { unlinkSync(fp); } catch (err) { console.error('Failed to delete photo file:', err); }
+    }
+  }
+  const result = db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  res.json({ ok: true, deleted: result.changes });
 });
 
 // ===== All /api routes below this require authentication =====
