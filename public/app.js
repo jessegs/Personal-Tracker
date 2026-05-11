@@ -269,6 +269,117 @@ $('add-btn').addEventListener('click', addEntry);
 $('clear-btn').addEventListener('click', clearForm);
 $('save-template-btn').addEventListener('click', saveAsTemplate);
 
+// ==== Scan label ====
+let scanData = null; // per-serving values from the scan
+const scanModal = $('scan-modal');
+const scanFileInput = $('scan-label-input');
+
+$('scan-label-btn').addEventListener('click', () => scanFileInput.click());
+$('scan-modal-close').addEventListener('click', closeScanModal);
+$('scan-cancel-btn').addEventListener('click', closeScanModal);
+$('scan-add-btn').addEventListener('click', addScannedToLog);
+$('scan-servings').addEventListener('input', updateScanTotals);
+
+scanModal.addEventListener('click', (e) => {
+  if (e.target === scanModal) closeScanModal();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !scanModal.hidden) closeScanModal();
+});
+
+scanFileInput.addEventListener('change', async () => {
+  const file = scanFileInput.files[0];
+  if (!file) return;
+  await uploadScanLabel(file);
+  scanFileInput.value = ''; // allow re-scanning the same file
+});
+
+async function uploadScanLabel(file) {
+  // Open modal in loading state
+  $('scan-result').hidden = true;
+  $('scan-loading').hidden = false;
+  scanModal.hidden = false;
+  setStatus($('scan-status'), '');
+
+  const fd = new FormData();
+  fd.append('image', file);
+  try {
+    const res = await fetch('/api/scan-label', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Scan failed');
+    scanData = data;
+    renderScanResult();
+  } catch (err) {
+    closeScanModal();
+    setStatus(status, err.message, 'error');
+  }
+}
+
+function renderScanResult() {
+  $('scan-loading').hidden = true;
+  $('scan-result').hidden = false;
+  $('scan-product-name').textContent = scanData.product_name || '';
+  $('scan-serving-size').textContent = scanData.serving_size
+    ? `Serving size: ${scanData.serving_size}`
+    : '';
+  $('scan-per-cal').textContent = Math.round(scanData.calories);
+  $('scan-per-protein').textContent = fmt(scanData.protein);
+  $('scan-per-carbs').textContent = fmt(scanData.carbs);
+  $('scan-per-fat').textContent = fmt(scanData.fat);
+  $('scan-servings').value = '1';
+  updateScanTotals();
+}
+
+function updateScanTotals() {
+  if (!scanData) return;
+  const s = parseFloat($('scan-servings').value) || 0;
+  $('scan-total-cal').textContent = Math.round(scanData.calories * s);
+  $('scan-total-protein').textContent = fmt(scanData.protein * s);
+  $('scan-total-carbs').textContent = fmt(scanData.carbs * s);
+  $('scan-total-fat').textContent = fmt(scanData.fat * s);
+}
+
+function closeScanModal() {
+  scanModal.hidden = true;
+  scanData = null;
+}
+
+async function addScannedToLog() {
+  if (!scanData) return;
+  const servings = parseFloat($('scan-servings').value);
+  if (!Number.isFinite(servings) || servings <= 0) {
+    setStatus($('scan-status'), 'Servings must be greater than 0', 'error');
+    return;
+  }
+  const description = scanData.product_name
+    ? `${scanData.product_name} (${servings}× serving)`
+    : scanData.serving_size
+      ? `${scanData.serving_size} (${servings}× serving)`
+      : `Scanned label (${servings}× serving)`;
+  try {
+    const res = await fetch('/api/entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: datePicker.value,
+        description,
+        calories: scanData.calories * servings,
+        protein: scanData.protein * servings,
+        carbs: scanData.carbs * servings,
+        fat: scanData.fat * servings,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    closeScanModal();
+    setStatus(status, 'Added from label', 'success');
+    loadEntries();
+  } catch (err) {
+    setStatus($('scan-status'), err.message, 'error');
+  }
+}
+
 async function addEntry() {
   const description = $('food-description').value.trim();
   const calories = parseFloat($('m-calories').value) || 0;

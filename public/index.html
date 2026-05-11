@@ -424,8 +424,13 @@
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
               Estimate
             </button>
+            <button id="scan-label-btn" type="button" class="btn-secondary" title="Scan a Nutrition Facts label">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Scan label
+            </button>
+            <input type="file" id="scan-label-input" accept="image/*" capture="environment" hidden />
           </div>
-          <p class="hint">Describe what you ate and let AI fill in the macros, or enter them manually below.</p>
+          <p class="hint">Describe what you ate and let AI fill in the macros, scan a Nutrition Facts label, or enter them manually below.</p>
 
           <div class="manual-row">
             <label>
@@ -514,6 +519,59 @@
         <div id="photo-gallery" class="photo-gallery"></div>
       </section>
     </main>
+
+    <!-- ===== Scan Label Modal ===== -->
+    <div id="scan-modal" class="modal-overlay" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="scan-modal-title">
+        <button id="scan-modal-close" type="button" class="modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+        <h2 id="scan-modal-title">Scan label</h2>
+
+        <div id="scan-loading" class="scan-loading" hidden>
+          <div class="scan-spinner"></div>
+          <p>Reading the label…</p>
+        </div>
+
+        <div id="scan-result" hidden>
+          <p class="hint" id="scan-product-name"></p>
+
+          <div class="scan-section-label">Per serving</div>
+          <div class="scan-per-serving">
+            <div><span class="scan-mini-label">Cal</span><span id="scan-per-cal">0</span></div>
+            <div><span class="scan-mini-label">P</span><span id="scan-per-protein">0</span>g</div>
+            <div><span class="scan-mini-label">C</span><span id="scan-per-carbs">0</span>g</div>
+            <div><span class="scan-mini-label">F</span><span id="scan-per-fat">0</span>g</div>
+          </div>
+          <p class="hint" id="scan-serving-size" style="margin-top: 8px;"></p>
+
+          <label class="weight-input-label" style="margin-top: 18px;">
+            <span>Servings consumed</span>
+            <div class="input-with-unit">
+              <input type="number" id="scan-servings" min="0.1" step="0.25" value="1" />
+              <span class="unit-tag">×</span>
+            </div>
+          </label>
+
+          <div class="scan-section-label" style="margin-top: 16px;">Total to log</div>
+          <div class="scan-totals">
+            <div><span class="scan-mini-label">Cal</span><span id="scan-total-cal">0</span></div>
+            <div><span class="scan-mini-label">P</span><span id="scan-total-protein">0</span>g</div>
+            <div><span class="scan-mini-label">C</span><span id="scan-total-carbs">0</span>g</div>
+            <div><span class="scan-mini-label">F</span><span id="scan-total-fat">0</span>g</div>
+          </div>
+
+          <div class="actions modal-footer-actions">
+            <button id="scan-add-btn" type="button" class="primary">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Add to log
+            </button>
+            <button id="scan-cancel-btn" type="button" class="btn-ghost">Cancel</button>
+            <span id="scan-status" class="status"></span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ===== Goals Modal ===== -->
     <div id="goals-modal" class="modal-overlay" hidden>

@@ -401,6 +401,16 @@ const photoUpload = multer({
   },
 });
 
+// In-memory upload (label scan — image isn't persisted, just sent to Claude)
+const labelScanUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/^image\//.test(file.mimetype)) cb(null, true);
+    else cb(new Error('Only image uploads are allowed'));
+  },
+});
+
 // ===== Auth routes =====
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
 const INVITE_CODE = process.env.INVITE_CODE || 'F3Sienna';
@@ -531,6 +541,71 @@ app.post('/api/estimate', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Estimation error:', err);
     res.status(500).json({ error: err.message || 'Estimation failed' });
+  }
+});
+
+app.post('/api/scan-label', requireAuth, labelScanUpload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'image required' });
+  if (!anthropic) {
+    return res.status(503).json({
+      error: 'AI not configured. Set ANTHROPIC_API_KEY in .env to use label scanning.',
+    });
+  }
+  try {
+    const base64 = req.file.buffer.toString('base64');
+    const mediaType = req.file.mimetype || 'image/jpeg';
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-4-7',
+      max_tokens: 1024,
+      system:
+        'You read Nutrition Facts labels. Extract per-serving values. If a value is missing on the label, set it to 0. Return product_name only if it is clearly visible on the package; otherwise return an empty string. The serving_size should be the human-readable text from the label (e.g., "1 cup (240ml)").',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: base64 },
+            },
+            {
+              type: 'text',
+              text: 'Extract the per-serving nutrition info from this label.',
+            },
+          ],
+        },
+      ],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              product_name: { type: 'string' },
+              serving_size: { type: 'string' },
+              calories: { type: 'number' },
+              protein: { type: 'number' },
+              carbs: { type: 'number' },
+              fat: { type: 'number' },
+            },
+            required: ['product_name', 'serving_size', 'calories', 'protein', 'carbs', 'fat'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+    const text = response.content.find((b) => b.type === 'text')?.text || '{}';
+    const parsed = JSON.parse(text);
+    res.json({
+      product_name: String(parsed.product_name || '').trim(),
+      serving_size: String(parsed.serving_size || '').trim(),
+      calories: Number(parsed.calories) || 0,
+      protein: Number(parsed.protein) || 0,
+      carbs: Number(parsed.carbs) || 0,
+      fat: Number(parsed.fat) || 0,
+    });
+  } catch (err) {
+    console.error('Label scan error:', err);
+    res.status(500).json({ error: err.message || 'Label scan failed' });
   }
 });
 
