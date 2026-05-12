@@ -1773,16 +1773,22 @@ button.primary:disabled {
 .daily-log-toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
   margin-top: 24px;
+}
+
+.daily-log-toolbar .admin-only[hidden] {
+  display: none;
 }
 
 @media (max-width: 600px) {
   .habits-toolbar,
   .daily-log-toolbar {
-    justify-content: stretch;
+    flex-direction: column;
   }
   .habits-toolbar .primary,
-  .daily-log-toolbar .primary {
+  .daily-log-toolbar .primary,
+  .daily-log-toolbar .btn-secondary {
     width: 100%;
     justify-content: center;
   }

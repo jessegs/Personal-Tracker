@@ -2381,6 +2381,16 @@ async function deleteHabit(id, name) {
 
 // ==== Admin ====
 
+$('open-admin-btn').addEventListener('click', () => {
+  // Switch the active tab to admin (panel exists, just not in top nav)
+  document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+  $('admin-tab').classList.add('active');
+  applyDateBarVisibility('admin');
+  loadAdminUsers();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
 async function loadAdminUsers() {
   try {
     const res = await fetch('/api/admin/users');
