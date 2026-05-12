@@ -125,6 +125,12 @@ if (!colExists('users', 'is_admin')) {
   db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0');
 }
 
+// Enforce case-insensitive usernames at the DB level so 'Jesse' and 'jesse'
+// can't coexist as separate accounts.
+db.exec(
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users(username COLLATE NOCASE)'
+);
+
 if (!colExists('entries', 'user_id')) {
   db.exec('ALTER TABLE entries ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE');
   db.exec('CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries(user_id, date)');
@@ -444,7 +450,9 @@ app.post('/api/auth/signup', (req, res) => {
   if (!password || typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+  const existing = db
+    .prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE')
+    .get(username);
   if (existing) {
     return res.status(409).json({ error: 'Username already taken' });
   }
@@ -470,7 +478,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'Username and password required' });
   }
   const user = db
-    .prepare('SELECT id, username, password_hash, salt FROM users WHERE username = ?')
+    .prepare('SELECT id, username, password_hash, salt FROM users WHERE username = ? COLLATE NOCASE')
     .get(username);
   if (!user || !verifyPassword(password, user.salt, user.password_hash)) {
     return res.status(401).json({ error: 'Invalid username or password' });
