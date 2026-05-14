@@ -1,0 +1,27 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also lets you trigger manually from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and update
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ~/Personal-Tracker
+            git fetch --quiet origin main
+            git reset --hard origin/main
+            npm install --omit=dev --silent
+            sudo systemctl restart personal-tracker
+            echo "Deployed $(git rev-parse --short HEAD) at $(date -u +%FT%TZ)"
