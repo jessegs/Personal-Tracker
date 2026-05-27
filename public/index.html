@@ -21,12 +21,6 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="bg-orbs" aria-hidden="true">
-      <span class="orb orb-1"></span>
-      <span class="orb orb-2"></span>
-      <span class="orb orb-3"></span>
-    </div>
-
     <!-- ===== Auth screen ===== -->
     <div id="auth-screen" class="auth-screen" hidden>
       <div class="auth-card">
@@ -75,46 +69,35 @@
 
     <header class="topbar">
       <div class="brand">
-        <div class="logo" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div>
-          <h1>Personal Tracker</h1>
-          <p class="tagline">Track calories, hit your goals</p>
-        </div>
+        <h1 id="page-title">Today</h1>
       </div>
-      <nav class="tabs">
-        <button class="tab active" data-tab="nutrition">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
-          Nutrition
-        </button>
-        <button class="tab" data-tab="log">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
-          Daily Log
-        </button>
-        <button class="tab" data-tab="photos">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-          Photos
-        </button>
-        <button class="tab" data-tab="habits">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Habits
-        </button>
-        <button class="tab" data-tab="workouts">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5 17.5 17.5"/><path d="M21 21l-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
-          Workouts
-        </button>
-      </nav>
-
       <div class="user-menu">
         <span class="user-name" id="user-name"></span>
-        <button id="logout-btn" type="button" class="logout-btn" title="Sign out">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </button>
       </div>
     </header>
+
+    <nav class="tabs" aria-label="Sections">
+      <button class="tab active" data-tab="nutrition" data-title="Today" aria-label="Today">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Today</span>
+      </button>
+      <button class="tab" data-tab="log" data-title="Daily" aria-label="Daily">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg>
+        <span>Daily</span>
+      </button>
+      <button class="tab" data-tab="workouts" data-title="Workouts" aria-label="Workouts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"/><path d="M18 5v14"/><path d="M3 8v8"/><path d="M21 8v8"/><path d="M6 12h12"/></svg>
+        <span>Workouts</span>
+      </button>
+      <button class="tab" data-tab="photos" data-title="Photos" aria-label="Photos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+        <span>Photos</span>
+      </button>
+      <button class="tab" data-tab="more" data-title="More" aria-label="More">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+        <span>More</span>
+      </button>
+    </nav>
 
     <main>
       <div class="date-bar" id="shared-date-bar">
@@ -284,16 +267,6 @@
           </div>
         </div>
 
-        <div class="daily-log-toolbar">
-          <button id="open-goals-btn" type="button" class="primary">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-            Goals
-          </button>
-          <button id="open-admin-btn" type="button" class="btn-secondary admin-only" hidden>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            Admin
-          </button>
-        </div>
       </section>
 
       <!-- ===== Nutrition ===== -->
@@ -478,24 +451,14 @@
         </div>
         <ul id="entries-list" class="entries-list"></ul>
 
-        <div class="daily-log-toolbar">
-          <button id="open-goals-btn-nutrition" type="button" class="primary">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-            Goals
-          </button>
+        <div class="section-header">
+          <h2>Habits <span id="habits-today-day" class="badge"></span></h2>
         </div>
+        <ul id="habits-today-list" class="habits-today-list"></ul>
       </section>
 
-      <!-- ===== Habits ===== -->
+      <!-- ===== Habits (full management, reached via More) ===== -->
       <section id="habits-tab" class="tab-panel">
-        <div class="card">
-          <div class="card-header">
-            <h2>Today</h2>
-            <span class="badge" id="habits-today-day">—</span>
-          </div>
-          <ul id="habits-today-list" class="habits-today-list"></ul>
-        </div>
-
         <div class="section-header">
           <h2>All habits</h2>
         </div>
@@ -568,7 +531,45 @@
         </div>
       </section>
 
-      <!-- ===== Admin ===== -->
+      <!-- ===== More (settings sheet) ===== -->
+      <section id="more-tab" class="tab-panel">
+        <div class="more-section">
+          <button class="more-row" id="more-goals" type="button">
+            <span class="more-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            </span>
+            <span>Goals</span>
+            <svg class="more-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+          <button class="more-row" id="more-habits" type="button">
+            <span class="more-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </span>
+            <span>Manage habits</span>
+            <svg class="more-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+          <button class="more-row admin-only" id="more-admin" type="button" hidden>
+            <span class="more-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </span>
+            <span>Admin</span>
+            <svg class="more-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+
+        <div class="more-section">
+          <button class="more-row" id="more-signout" type="button" data-danger>
+            <span class="more-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </span>
+            <span>Sign out</span>
+          </button>
+        </div>
+
+        <p class="hint" style="text-align:center;margin-top:24px;">Signed in as <strong id="more-user-name"></strong></p>
+      </section>
+
+      <!-- ===== Admin (reached via More) ===== -->
       <section id="admin-tab" class="tab-panel">
         <div class="card">
           <div class="card-header">

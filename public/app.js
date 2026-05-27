@@ -123,7 +123,9 @@ function hideAuthScreen() {
   setStatus(authStatus, '');
 }
 
-$('logout-btn').addEventListener('click', logout);
+// Sign out lives in the More sheet now
+const _signoutBtn = $('more-signout');
+if (_signoutBtn) _signoutBtn.addEventListener('click', logout);
 
 async function logout() {
   try {
@@ -179,15 +181,22 @@ function applyDateBarVisibility(tabName) {
   bar.hidden = !TABS_WITH_DATE.has(tabName);
 }
 
+function setPageTitle(t) {
+  const el = $('page-title');
+  if (el && t) el.textContent = t;
+}
+
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
     btn.classList.add('active');
-    $(`${btn.dataset.tab}-tab`).classList.add('active');
+    const target = $(`${btn.dataset.tab}-tab`);
+    if (target) target.classList.add('active');
     applyDateBarVisibility(btn.dataset.tab);
+    setPageTitle(btn.dataset.title || btn.textContent.trim());
     if (btn.dataset.tab === 'photos') loadPhotos();
-    if (btn.dataset.tab === 'habits') loadHabits();
+    if (btn.dataset.tab === 'nutrition') loadHabits(); // habits-today lives here now
     if (btn.dataset.tab === 'admin') loadAdminUsers();
     if (btn.dataset.tab === 'workouts') loadWorkouts();
   });
@@ -919,8 +928,9 @@ $('goals-save-btn').addEventListener('click', saveGoals);
 
 // Goals modal
 const goalsModal = $('goals-modal');
-$('open-goals-btn').addEventListener('click', () => openGoalsModal('body'));
-$('open-goals-btn-nutrition').addEventListener('click', () => openGoalsModal('nutrition'));
+// Goals are reached via the More tab now
+const _moreGoals = $('more-goals');
+if (_moreGoals) _moreGoals.addEventListener('click', () => openGoalsModal('all'));
 $('goals-modal-close').addEventListener('click', closeGoalsModal);
 $('goals-modal-cancel').addEventListener('click', closeGoalsModal);
 
@@ -2266,10 +2276,12 @@ async function loadHabits() {
 
 function renderHabitsToday(habits, completedIds, today) {
   const list = $('habits-today-list');
+  if (!list) return;
   list.innerHTML = '';
 
   const dow = new Date().getDay();
-  $('habits-today-day').textContent = DAY_FULL[dow];
+  const dayLabel = $('habits-today-day');
+  if (dayLabel) dayLabel.textContent = DAY_FULL[dow];
 
   const todays = habits.filter((h) => h.days[dow] === '1');
 
@@ -3276,15 +3288,25 @@ async function clearCoachConversation() {
 
 // ==== Admin ====
 
-$('open-admin-btn').addEventListener('click', () => {
-  // Switch the active tab to admin (panel exists, just not in top nav)
-  document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
+// Routes to a tab panel that isn't in the bottom nav (admin or habits manage).
+// Bottom nav stays on "More" so the user knows where they are.
+function switchToSubPanel(panelId, loader, title) {
   document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
-  $('admin-tab').classList.add('active');
-  applyDateBarVisibility('admin');
-  loadAdminUsers();
+  const panel = $(panelId);
+  if (panel) panel.classList.add('active');
+  applyDateBarVisibility(panelId.replace(/-tab$/, ''));
+  if (typeof loader === 'function') loader();
+  if (title) setPageTitle(title);
   window.scrollTo({ top: 0, behavior: 'smooth' });
-});
+}
+
+const _moreAdmin = $('more-admin');
+if (_moreAdmin)
+  _moreAdmin.addEventListener('click', () => switchToSubPanel('admin-tab', loadAdminUsers, 'Admin'));
+
+const _moreHabits = $('more-habits');
+if (_moreHabits)
+  _moreHabits.addEventListener('click', () => switchToSubPanel('habits-tab', loadHabits, 'Habits'));
 
 async function loadAdminUsers() {
   try {
@@ -3410,7 +3432,10 @@ async function deleteAdminUser(id, username) {
 
 function enterApp() {
   if (currentUser) {
-    $('user-name').textContent = currentUser.username;
+    const nameEl = $('user-name');
+    if (nameEl) nameEl.textContent = currentUser.username;
+    const moreName = $('more-user-name');
+    if (moreName) moreName.textContent = currentUser.username;
     // Show admin-only UI if this user has the flag
     document.querySelectorAll('.admin-only').forEach((el) => {
       el.hidden = !currentUser.is_admin;
@@ -3425,6 +3450,7 @@ function enterApp() {
   loadCheckIn();
   loadMeasurements();
   loadMealTemplates();
+  loadHabits(); // habits-today lives in the default Today tab now
   loadStravaStatus();
 }
 
