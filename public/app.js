@@ -971,11 +971,78 @@ function gramTargetFromPct(macro) {
 }
 
 function applyGoalsToCards() {
-  setRing('cal', 'calories', currentTotals.calories, currentGoals.daily_calories, 'kcal');
+  setCalRing(currentTotals.calories, currentGoals.daily_calories);
   setRing('protein', 'protein', currentTotals.protein, gramTargetFromPct('protein'), 'g');
   setRing('carbs', 'carbs', currentTotals.carbs, gramTargetFromPct('carbs'), 'g');
   setRing('fat', 'fat', currentTotals.fat, gramTargetFromPct('fat'), 'g');
   setRing('water', 'water', currentWater, currentGoals.daily_water_oz, 'oz');
+}
+
+// Calorie hero ring: split into protein/carbs/fat segments by their kcal share.
+// With a goal: each segment's length is (macro_kcal / goal_kcal) × 100. The ring
+// fills proportionally — if you've eaten 60% of your goal split 30/50/20 P/C/F,
+// the ring shows 18%/30%/12% in those colors and 40% empty.
+// Without a goal: segments use macro_kcal_total as the denominator so the ring
+// always shows the BREAKDOWN of what's logged so far (it'll fill to 100%).
+function setCalRing(currentKcal, goal) {
+  const card = document.querySelector('.cal-hero');
+  if (!card) return;
+
+  const pCal = (currentTotals.protein || 0) * KCAL_PER_G.protein;
+  const cCal = (currentTotals.carbs || 0) * KCAL_PER_G.carbs;
+  const fCal = (currentTotals.fat || 0) * KCAL_PER_G.fat;
+  const macroSum = pCal + cCal + fCal;
+
+  const goalNum = Number(goal);
+  const hasGoal = goalNum > 0;
+  const denom = hasGoal ? goalNum : (macroSum > 0 ? macroSum : 1);
+
+  let pPct = (pCal / denom) * 100;
+  let cPct = (cCal / denom) * 100;
+  let fPct = (fCal / denom) * 100;
+
+  // If we've blown past the goal, scale segments down proportionally so they
+  // still fit the ring while preserving the macro ratio. The "over" pill
+  // indicator handles communicating that.
+  const sum = pPct + cPct + fPct;
+  const isOver = hasGoal && currentKcal > goalNum;
+  if (sum > 100) {
+    const scale = 100 / sum;
+    pPct *= scale;
+    cPct *= scale;
+    fPct *= scale;
+  }
+
+  card.classList.toggle('over', isOver);
+  setCalSegment(card.querySelector('.cal-seg-protein'), pPct, 0);
+  setCalSegment(card.querySelector('.cal-seg-carbs'), cPct, pPct);
+  setCalSegment(card.querySelector('.cal-seg-fat'), fPct, pPct + cPct);
+
+  const goalEl = $('goal-calories');
+  if (!goalEl) return;
+  if (hasGoal) {
+    if (isOver) {
+      goalEl.textContent = `+${fmt(currentKcal - goalNum)} kcal over`;
+      goalEl.classList.add('over');
+    } else {
+      goalEl.textContent = `${fmt(goalNum - currentKcal)} kcal left of ${fmt(goalNum)}`;
+      goalEl.classList.remove('over');
+    }
+  } else {
+    goalEl.textContent = 'no goal set';
+    goalEl.classList.remove('over');
+  }
+}
+
+function setCalSegment(circle, lengthPct, startPct) {
+  if (!circle) return;
+  // pathLength=100 normalizes the circle so 1 unit = 1% of the circumference.
+  // dasharray "L gap" draws a stroke of length L then a gap. dashoffset
+  // shifts the starting point clockwise (since the SVG is rotated -90deg, a
+  // NEGATIVE offset advances along the path).
+  const clampedLen = Math.max(0, Math.min(100, lengthPct));
+  circle.style.strokeDasharray = `${clampedLen} ${100 - clampedLen}`;
+  circle.style.strokeDashoffset = String(-startPct);
 }
 
 function setRing(cardClass, key, current, goal, unit) {

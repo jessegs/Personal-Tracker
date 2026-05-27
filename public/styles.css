@@ -571,30 +571,24 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 /* =================================================================
    Macro summary (Today)
    ================================================================= */
-.totals {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+
+/* Calories hero card: large ring divided into P/C/F segments */
+.cal-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 18px;
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 8px 0;
   margin-bottom: 12px;
 }
 
-.total-card {
-  display: grid;
-  grid-template-columns: 52px 1fr;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--separator-soft);
-}
-.total-card:last-child { border-bottom: none; }
-
-.total-card .ring-wrap {
-  width: 52px;
-  height: 52px;
+.cal-ring-wrap {
+  width: 130px;
+  height: 130px;
   position: relative;
+  flex-shrink: 0;
 }
 .ring {
   width: 100%;
@@ -606,6 +600,105 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   stroke: var(--surface-2);
   stroke-width: 10;
 }
+.cal-seg {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: butt;
+  stroke-dasharray: 0 100;
+  stroke-dashoffset: 0;
+  transition: stroke-dasharray 0.6s var(--ease), stroke-dashoffset 0.6s var(--ease);
+}
+.cal-seg-protein { stroke: var(--protein); }
+.cal-seg-carbs { stroke: var(--carbs); }
+.cal-seg-fat { stroke: var(--fat); }
+
+.cal-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  line-height: 1;
+  gap: 2px;
+}
+.cal-value {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.cal-unit {
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.cal-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cal-label {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.cal-goal {
+  font-size: 13px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.cal-goal.over { color: var(--danger); }
+
+.cal-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+.cal-bd-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.cal-bd-item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+.cal-bd-item.protein .dot { background: var(--protein); }
+.cal-bd-item.carbs .dot { background: var(--carbs); }
+.cal-bd-item.fat .dot { background: var(--fat); }
+
+/* 2×2 grid: protein, carbs, fat, water */
+.macro-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.macro-grid .total-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 16px 12px;
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+.macro-grid .ring-wrap {
+  width: 68px;
+  height: 68px;
+  position: relative;
+}
 .ring-fg {
   fill: none;
   stroke-width: 10;
@@ -614,29 +707,11 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   stroke-dashoffset: 100;
   transition: stroke-dashoffset 0.5s var(--ease);
 }
-.total-card.cal .ring-fg { stroke: var(--cal); }
 .total-card.protein .ring-fg { stroke: var(--protein); }
 .total-card.carbs .ring-fg { stroke: var(--carbs); }
 .total-card.fat .ring-fg { stroke: var(--fat); }
 .total-card.water .ring-fg { stroke: var(--water); }
 .total-card.over .ring-fg { stroke: var(--danger); }
-
-.total-card .card-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.total-card .label {
-  font-size: 15px;
-  font-weight: 500;
-}
-.total-card .goal-text {
-  font-size: 12px;
-  color: var(--text-2);
-  font-variant-numeric: tabular-nums;
-}
-.total-card .goal-text.over { color: var(--danger); }
 
 .ring-center {
   position: absolute;
@@ -647,15 +722,34 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   flex-direction: column;
   pointer-events: none;
   line-height: 1;
+  gap: 1px;
 }
-.total-card .ring-value {
-  font-size: 13px;
+.macro-grid .ring-value {
+  font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.total-card .ring-unit {
-  display: none; /* unit shows in the goal-text row instead */
+.macro-grid .ring-unit {
+  font-size: 10px;
+  color: var(--text-2);
 }
+
+.macro-grid .card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.macro-grid .label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.macro-grid .goal-text {
+  font-size: 11px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.macro-grid .goal-text.over { color: var(--danger); }
 
 /* =================================================================
    Water quick log

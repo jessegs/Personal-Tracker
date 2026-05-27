@@ -271,23 +271,33 @@
 
       <!-- ===== Nutrition ===== -->
       <section id="nutrition-tab" class="tab-panel active">
-        <div class="totals">
-          <div class="total-card cal">
-            <div class="ring-wrap">
-              <svg class="ring" viewBox="0 0 100 100">
-                <circle class="ring-bg" cx="50" cy="50" r="44" />
-                <circle class="ring-fg" cx="50" cy="50" r="44" pathLength="100" />
-              </svg>
-              <div class="ring-center">
-                <span class="ring-value" id="total-calories">0</span>
-                <span class="ring-unit">kcal</span>
-              </div>
-            </div>
-            <div class="card-meta">
-              <span class="label">Calories</span>
-              <span class="goal-text" id="goal-calories">no goal</span>
+        <!-- Calories hero card: ring split into protein/carbs/fat segments -->
+        <div class="cal-hero total-card cal">
+          <div class="cal-ring-wrap">
+            <svg class="ring ring-large" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="ring-bg" cx="50" cy="50" r="44" pathLength="100" />
+              <circle class="cal-seg cal-seg-protein" cx="50" cy="50" r="44" pathLength="100" />
+              <circle class="cal-seg cal-seg-carbs" cx="50" cy="50" r="44" pathLength="100" />
+              <circle class="cal-seg cal-seg-fat" cx="50" cy="50" r="44" pathLength="100" />
+            </svg>
+            <div class="cal-ring-center">
+              <span class="cal-value" id="total-calories">0</span>
+              <span class="cal-unit">kcal</span>
             </div>
           </div>
+          <div class="cal-legend">
+            <span class="cal-label">Calories</span>
+            <span class="cal-goal goal-text" id="goal-calories">no goal</span>
+            <div class="cal-breakdown">
+              <span class="cal-bd-item protein"><span class="dot"></span>Protein</span>
+              <span class="cal-bd-item carbs"><span class="dot"></span>Carbs</span>
+              <span class="cal-bd-item fat"><span class="dot"></span>Fat</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2x2 grid: protein, carbs, fat, water -->
+        <div class="macro-grid">
           <div class="total-card protein">
             <div class="ring-wrap">
               <svg class="ring" viewBox="0 0 100 100">
