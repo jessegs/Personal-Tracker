@@ -3,32 +3,34 @@
    ================================================================= */
 
 :root {
-  /* Surfaces */
-  --bg: #000;
-  --surface: #1c1c1e;
-  --surface-2: #2c2c2e;
-  --surface-3: #3a3a3c;
-  --separator: rgba(84, 84, 88, 0.65);
-  --separator-soft: rgba(84, 84, 88, 0.3);
+  color-scheme: light;
+
+  /* Surfaces (iOS light system palette) */
+  --bg: #f2f2f7;             /* systemGroupedBackground */
+  --surface: #ffffff;        /* card background */
+  --surface-2: #f2f2f7;      /* nested fill / chips */
+  --surface-3: #e5e5ea;      /* pressed / hover */
+  --separator: rgba(60, 60, 67, 0.29);
+  --separator-soft: rgba(60, 60, 67, 0.12);
 
   /* Text */
-  --text: #fff;
-  --text-2: rgba(235, 235, 245, 0.6);
-  --text-3: rgba(235, 235, 245, 0.3);
+  --text: #000;
+  --text-2: rgba(60, 60, 67, 0.6);
+  --text-3: rgba(60, 60, 67, 0.3);
 
   /* Accent + status */
-  --accent: #7c5cff;
-  --accent-pressed: #6346e0;
-  --danger: #ff453a;
-  --success: #30d158;
-  --warning: #ff9f0a;
+  --accent: #6c4ef0;
+  --accent-pressed: #5a3edc;
+  --danger: #ff3b30;
+  --success: #34c759;
+  --warning: #ff9500;
 
-  /* Macro colors (used only for tiny indicators) */
-  --cal: #ff9f0a;
-  --protein: #ff375f;
-  --carbs: #ffd60a;
-  --fat: #30d158;
-  --water: #64d2ff;
+  /* Macro colors (slightly desaturated for light) */
+  --cal: #ff9500;
+  --protein: #ff2d55;
+  --carbs: #ffcc00;
+  --fat: #34c759;
+  --water: #32ade6;
 
   /* Strava brand */
   --strava: #fc4c02;
@@ -132,7 +134,7 @@ a {
 .auth-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: var(--surface-2);
+  background: var(--surface-3);
   border-radius: 9px;
   padding: 2px;
   margin-bottom: 20px;
@@ -146,8 +148,9 @@ a {
   transition: all 0.15s var(--ease);
 }
 .auth-tab.active {
-  background: var(--surface-3);
+  background: #fff;
   color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .auth-form {
@@ -194,7 +197,7 @@ a {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   padding: calc(env(safe-area-inset-top) + 8px) var(--gutter) 8px;
@@ -249,7 +252,7 @@ a {
   bottom: 0;
   z-index: 30;
   display: flex;
-  background: rgba(20, 20, 20, 0.92);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: saturate(180%) blur(24px);
   -webkit-backdrop-filter: saturate(180%) blur(24px);
   border-top: 0.5px solid var(--separator-soft);
@@ -342,9 +345,7 @@ main {
   font-variant-numeric: tabular-nums;
 }
 #date-picker:focus { outline: none; }
-/* iOS date picker fix */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
   opacity: 0.6;
 }
 
@@ -441,7 +442,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   gap: 6px;
   min-height: 40px;
 }
-.btn-ghost:hover { background: rgba(124, 92, 255, 0.1); }
+.btn-ghost:hover { background: rgba(108, 78, 240, 0.1); }
 
 /* Action row */
 .actions {
@@ -1123,13 +1124,13 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 }
 .workouts-cal-cell:hover:not(.outside):not(.empty):not(.rest) { background: var(--surface-3); }
 .workouts-cal-cell.outside { background: transparent; cursor: default; }
-.workouts-cal-cell.empty { background: rgba(28, 28, 30, 0.4); cursor: default; }
-.workouts-cal-cell.rest { background: var(--surface); cursor: default; opacity: 0.5; }
+.workouts-cal-cell.empty { background: rgba(120, 120, 128, 0.08); cursor: default; }
+.workouts-cal-cell.rest { background: var(--surface-2); cursor: default; opacity: 0.7; }
 .workouts-cal-cell.today {
   outline: 1.5px solid var(--accent);
 }
 .workouts-cal-cell.completed {
-  background: rgba(124, 92, 255, 0.18);
+  background: rgba(108, 78, 240, 0.18);
 }
 .day-num {
   font-size: 11px;
@@ -1164,7 +1165,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.35);
   z-index: 200;
   display: flex;
   align-items: flex-end;
@@ -1460,7 +1461,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 }
 .coach-bubble.system {
   align-self: center;
-  background: rgba(124, 92, 255, 0.12);
+  background: rgba(108, 78, 240, 0.12);
   color: var(--accent);
   font-size: 12px;
   padding: 6px 12px;
@@ -1506,7 +1507,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 }
 .style-pill:hover { background: var(--surface-3); }
 .style-pill.active {
-  background: rgba(124, 92, 255, 0.18);
+  background: rgba(108, 78, 240, 0.18);
   outline: 1.5px solid var(--accent);
 }
 .style-pill svg { flex-shrink: 0; color: var(--accent); }
