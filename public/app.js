@@ -195,7 +195,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
     if (target) target.classList.add('active');
     applyDateBarVisibility(btn.dataset.tab);
     setPageTitle(btn.dataset.title || btn.textContent.trim());
-    if (btn.dataset.tab === 'photos') loadPhotos();
+    if (btn.dataset.tab === 'log') loadPhotos(); // photos live on the Daily tab now
     if (btn.dataset.tab === 'habits') loadHabits();
     if (btn.dataset.tab === 'admin') loadAdminUsers();
     if (btn.dataset.tab === 'workouts') loadWorkouts();
@@ -3371,9 +3371,6 @@ const _moreAdmin = $('more-admin');
 if (_moreAdmin)
   _moreAdmin.addEventListener('click', () => switchToSubPanel('admin-tab', loadAdminUsers, 'Admin'));
 
-const _morePhotos = $('more-photos');
-if (_morePhotos)
-  _morePhotos.addEventListener('click', () => switchToSubPanel('photos-tab', loadPhotos, 'Photos'));
 
 async function loadAdminUsers() {
   try {
@@ -3517,6 +3514,7 @@ function enterApp() {
   loadCheckIn();
   loadMeasurements();
   loadMealTemplates();
+  loadPhotos();
   loadStravaStatus();
 }
 

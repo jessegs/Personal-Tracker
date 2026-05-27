@@ -1668,11 +1668,15 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 .file-input input[type="file"] { display: none; }
 .file-input svg { color: var(--text-2); }
 
+.photo-upload .photo-gallery {
+  margin-top: 14px;
+}
 .photo-gallery {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
+.photo-gallery:empty { display: none; }
 .photo-card {
   background: var(--surface);
   border-radius: var(--radius-sm);
