@@ -19,8 +19,8 @@
   --text-3: rgba(60, 60, 67, 0.3);
 
   /* Accent + status */
-  --accent: #6c4ef0;
-  --accent-pressed: #5a3edc;
+  --accent: #2ea24a;
+  --accent-pressed: #258a3e;
   --danger: #ff3b30;
   --success: #34c759;
   --warning: #ff9500;
@@ -442,7 +442,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   gap: 6px;
   min-height: 40px;
 }
-.btn-ghost:hover { background: rgba(108, 78, 240, 0.1); }
+.btn-ghost:hover { background: rgba(46, 162, 74, 0.1); }
 
 /* Action row */
 .actions {
@@ -1130,7 +1130,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   outline: 1.5px solid var(--accent);
 }
 .workouts-cal-cell.completed {
-  background: rgba(108, 78, 240, 0.18);
+  background: rgba(46, 162, 74, 0.18);
 }
 .day-num {
   font-size: 11px;
@@ -1461,7 +1461,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 }
 .coach-bubble.system {
   align-self: center;
-  background: rgba(108, 78, 240, 0.12);
+  background: rgba(46, 162, 74, 0.12);
   color: var(--accent);
   font-size: 12px;
   padding: 6px 12px;
@@ -1507,7 +1507,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 }
 .style-pill:hover { background: var(--surface-3); }
 .style-pill.active {
-  background: rgba(108, 78, 240, 0.18);
+  background: rgba(46, 162, 74, 0.18);
   outline: 1.5px solid var(--accent);
 }
 .style-pill svg { flex-shrink: 0; color: var(--accent); }
