@@ -196,7 +196,8 @@ document.querySelectorAll('.tab').forEach((btn) => {
     applyDateBarVisibility(btn.dataset.tab);
     setPageTitle(btn.dataset.title || btn.textContent.trim());
     if (btn.dataset.tab === 'photos') loadPhotos();
-    if (btn.dataset.tab === 'nutrition') loadHabits(); // habits-today lives here now
+    if (btn.dataset.tab === 'nutrition') loadHabits(); // habits-today lives here too
+    if (btn.dataset.tab === 'habits') loadHabits();
     if (btn.dataset.tab === 'admin') loadAdminUsers();
     if (btn.dataset.tab === 'workouts') loadWorkouts();
   });
@@ -3304,9 +3305,9 @@ const _moreAdmin = $('more-admin');
 if (_moreAdmin)
   _moreAdmin.addEventListener('click', () => switchToSubPanel('admin-tab', loadAdminUsers, 'Admin'));
 
-const _moreHabits = $('more-habits');
-if (_moreHabits)
-  _moreHabits.addEventListener('click', () => switchToSubPanel('habits-tab', loadHabits, 'Habits'));
+const _morePhotos = $('more-photos');
+if (_morePhotos)
+  _morePhotos.addEventListener('click', () => switchToSubPanel('photos-tab', loadPhotos, 'Photos'));
 
 async function loadAdminUsers() {
   try {
