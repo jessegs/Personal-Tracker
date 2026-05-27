@@ -505,7 +505,7 @@
           <div class="card-header">
             <h2>No active plan</h2>
           </div>
-          <p class="hint">Build a personalized workout plan tailored to your goal and style. Claude will generate a 7-day schedule repeating across your chosen date range.</p>
+          <p class="hint">Build a personalized workout plan tailored to your goal and style. AI will generate a 7-day schedule repeating across your chosen date range.</p>
           <div class="actions" style="margin-top: 12px;">
             <button id="create-plan-btn" type="button" class="primary">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
@@ -529,6 +529,10 @@
               </div>
             </div>
             <p class="hint" id="workouts-plan-summary"></p>
+            <button id="ai-coach-btn" type="button" class="primary workouts-ai-coach">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+              AI coach
+            </button>
             <div class="workouts-calendar">
               <div class="workouts-cal-header">
                 <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
@@ -538,17 +542,9 @@
           </div>
 
           <div class="actions" style="margin-top: 16px;">
-            <button id="ai-coach-btn" type="button" class="primary">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
-              AI coach
-            </button>
             <button id="create-plan-btn-2" type="button" class="btn-secondary">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
               New plan
-            </button>
-            <button id="strava-connect-btn" type="button" class="btn-strava" hidden>
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
-              <span id="strava-connect-label">Connect Strava</span>
             </button>
             <button id="delete-plan-btn" type="button" class="btn-ghost">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -566,6 +562,13 @@
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
             </span>
             <span>Goals</span>
+            <svg class="more-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+          <button class="more-row" id="strava-connect-btn" type="button" hidden>
+            <span class="more-icon strava-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+            </span>
+            <span id="strava-connect-label">Connect Strava</span>
             <svg class="more-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
           </button>
           <button class="more-row admin-only" id="more-admin" type="button" hidden>
@@ -726,7 +729,7 @@
             </label>
           </div>
 
-          <p class="hint">Claude will generate a 7-day weekly template and repeat it across your date range.</p>
+          <p class="hint">AI will generate a 7-day weekly template and repeat it across your date range.</p>
 
           <div class="actions modal-footer-actions">
             <button type="submit" id="create-plan-submit" class="primary">

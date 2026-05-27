@@ -1202,6 +1202,14 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
    ================================================================= */
 .workouts-empty .hint { margin-bottom: 12px; }
 
+/* Prominent AI coach action right under the plan title/summary */
+.workouts-ai-coach {
+  width: 100%;
+  margin: 4px 0 14px;
+}
+
+.more-icon.strava-icon { color: var(--strava); }
+
 .workouts-plan-actions {
   display: flex;
   align-items: center;
