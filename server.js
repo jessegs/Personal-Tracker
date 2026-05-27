@@ -7,7 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { fileURLToPath } from 'url';
 import { dirname, join, extname, basename } from 'path';
 import { mkdirSync, existsSync, unlinkSync } from 'fs';
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { randomBytes, scryptSync, timingSafeEqual, createHmac } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -1002,8 +1002,7 @@ function stravaEnabled() {
 function makeStravaState(userId) {
   const exp = Math.floor(Date.now() / 1000) + 15 * 60;
   const payload = `${userId}.${exp}`;
-  const hmac = require('crypto')
-    .createHmac('sha256', STRAVA_CLIENT_SECRET || 'fallback')
+  const hmac = createHmac('sha256', STRAVA_CLIENT_SECRET || 'fallback')
     .update(payload)
     .digest('hex')
     .slice(0, 32);
@@ -1015,8 +1014,7 @@ function verifyStravaState(state) {
   const parts = state.split('.');
   if (parts.length !== 3) return null;
   const [uid, exp, sig] = parts;
-  const expected = require('crypto')
-    .createHmac('sha256', STRAVA_CLIENT_SECRET || 'fallback')
+  const expected = createHmac('sha256', STRAVA_CLIENT_SECRET || 'fallback')
     .update(`${uid}.${exp}`)
     .digest('hex')
     .slice(0, 32);
