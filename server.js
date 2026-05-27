@@ -1229,9 +1229,18 @@ app.post('/api/workouts/:id/push-to-strava', requireAuth, async (req, res) => {
   const estMinutes = Math.max(20, Math.min(120, workingExercises.length * 6));
   const elapsedSeconds = estMinutes * 60;
 
-  // Map style → Strava sport_type
-  const sportType =
-    style === 'gym' ? 'WeightTraining' : style === 'outdoor' ? 'Workout' : 'Workout';
+  // Map style → Strava sport_type. For race_prep, check the workout focus/title
+  // to decide if it's a run (most days) vs a strength/mobility day.
+  function pickSportType() {
+    if (style === 'gym') return 'WeightTraining';
+    if (style === 'race_prep') {
+      const t = `${w.title || ''} ${w.focus || ''}`.toLowerCase();
+      const looksLikeRun = /\b(run|jog|tempo|interval|track|long run|mile|5k|10k|half|marathon|easy)\b/.test(t);
+      return looksLikeRun ? 'Run' : 'Workout';
+    }
+    return 'Workout';
+  }
+  const sportType = pickSportType();
 
   // start_date_local at 7am on the workout's date
   const startLocal = `${w.date}T07:00:00`;
@@ -1274,7 +1283,7 @@ app.post('/api/workouts/:id/push-to-strava', requireAuth, async (req, res) => {
 
 // ===== Workouts =====
 
-const WORKOUT_STYLES = new Set(['gym', 'bodyweight', 'outdoor']);
+const WORKOUT_STYLES = new Set(['gym', 'bodyweight', 'race_prep']);
 
 function isoDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -1292,7 +1301,7 @@ app.post('/api/workouts/plans', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'goal required (min 3 chars)' });
   }
   if (!WORKOUT_STYLES.has(style)) {
-    return res.status(400).json({ error: 'style must be gym, bodyweight, or outdoor' });
+    return res.status(400).json({ error: 'style must be gym, bodyweight, or race_prep' });
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(end_date)) {
     return res.status(400).json({ error: 'valid start_date and end_date required (YYYY-MM-DD)' });
@@ -1315,7 +1324,7 @@ app.post('/api/workouts/plans', requireAuth, async (req, res) => {
   const styleHint = {
     gym: 'free weights, machines, cables, cardio equipment. Specify weight as a percentage of 1RM or a target intensity (e.g., "RPE 7"), since you don\'t know the user\'s exact strength yet.',
     bodyweight: 'pushups, pull-ups, squats, lunges, planks, dips, burpees, etc. No equipment. Use variations to scale difficulty.',
-    outdoor: 'rucking, sandbag carries, sandbag squats/cleans, sled drags, hill sprints, sandbag-to-shoulder, farmer carries. Specify ruck weight or sandbag weight in pounds.',
+    race_prep: 'periodized run training for a goal race. Mix easy runs, tempo runs, interval/track work (e.g., "6 x 800m @ 5K pace"), long runs, and a weekly recovery/rest day. Include 1-2 supplemental strength or mobility sessions per week (core, single-leg, hip mobility). Specify distance or duration for runs and target pace as a perceived effort or relative pace (e.g., "easy/Zone 2", "tempo/threshold", "5K pace"). Taper down volume in the final 7-10 days before the end date — the end date should be treated as race day.',
   }[style];
 
   try {
