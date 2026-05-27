@@ -364,21 +364,23 @@
           </div>
         </div>
 
-        <div class="section-header">
-          <h2>Water</h2>
-        </div>
-        <div class="water-log-row">
-          <button class="water-quick-btn" data-amount="8" type="button">+8 oz</button>
-          <button class="water-quick-btn" data-amount="16" type="button">+16 oz</button>
-          <button class="water-quick-btn" data-amount="24" type="button">+24 oz</button>
-          <div class="water-custom-wrap">
-            <input type="number" id="water-custom" min="1" step="1" placeholder="Custom" />
-            <button id="water-custom-btn" class="water-quick-btn" type="button">Add</button>
+        <div class="card add-water">
+          <div class="card-header">
+            <h2>Add water</h2>
           </div>
-          <button id="water-reset-btn" class="water-reset-btn" type="button" title="Reset water for this day">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-            Reset
-          </button>
+          <div class="water-log-row">
+            <button class="water-quick-btn" data-amount="8" type="button">+8 oz</button>
+            <button class="water-quick-btn" data-amount="16" type="button">+16 oz</button>
+            <button class="water-quick-btn" data-amount="24" type="button">+24 oz</button>
+            <div class="water-custom-wrap">
+              <input type="number" id="water-custom" min="1" step="1" placeholder="Custom" />
+              <button id="water-custom-btn" class="water-quick-btn" type="button">Add</button>
+            </div>
+            <button id="water-reset-btn" class="water-reset-btn" type="button" title="Reset water for this day">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              Reset
+            </button>
+          </div>
         </div>
 
         <div class="card add-food">
@@ -457,15 +459,15 @@
           <h2>Today's entries</h2>
         </div>
         <ul id="entries-list" class="entries-list"></ul>
-
-        <div class="section-header">
-          <h2>Habits <span id="habits-today-day" class="badge"></span></h2>
-        </div>
-        <ul id="habits-today-list" class="habits-today-list"></ul>
       </section>
 
-      <!-- ===== Habits (full management, reached via More) ===== -->
+      <!-- ===== Habits ===== -->
       <section id="habits-tab" class="tab-panel">
+        <div class="section-header">
+          <h2>Today <span id="habits-today-day" class="badge"></span></h2>
+        </div>
+        <ul id="habits-today-list" class="habits-today-list"></ul>
+
         <div class="section-header">
           <h2>All habits</h2>
         </div>

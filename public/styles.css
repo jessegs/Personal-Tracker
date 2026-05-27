@@ -752,20 +752,15 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 .macro-grid .goal-text.over { color: var(--danger); }
 
 /* =================================================================
-   Water quick log
+   Water quick log (inside the Add water card)
    ================================================================= */
+.add-water { overflow: hidden; }
 .water-log-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 12px;
-  margin-bottom: 12px;
-}
-.water-log-label {
-  display: none; /* drop the redundant label on mobile */
+  width: 100%;
 }
 .water-quick-btn {
   background: var(--surface-2);

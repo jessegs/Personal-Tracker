@@ -196,7 +196,6 @@ document.querySelectorAll('.tab').forEach((btn) => {
     applyDateBarVisibility(btn.dataset.tab);
     setPageTitle(btn.dataset.title || btn.textContent.trim());
     if (btn.dataset.tab === 'photos') loadPhotos();
-    if (btn.dataset.tab === 'nutrition') loadHabits(); // habits-today lives here too
     if (btn.dataset.tab === 'habits') loadHabits();
     if (btn.dataset.tab === 'admin') loadAdminUsers();
     if (btn.dataset.tab === 'workouts') loadWorkouts();
@@ -3518,7 +3517,6 @@ function enterApp() {
   loadCheckIn();
   loadMeasurements();
   loadMealTemplates();
-  loadHabits(); // habits-today lives in the default Today tab now
   loadStravaStatus();
 }
 
