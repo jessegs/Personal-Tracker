@@ -1618,6 +1618,677 @@ button.primary:disabled {
 }
 
 /* =================================================================
+   Workouts tab
+   ================================================================= */
+
+.workouts-empty .hint {
+  margin: 0 0 4px;
+}
+
+.workouts-plan-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workouts-month-label {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  padding: 0 8px;
+  min-width: 110px;
+  text-align: center;
+}
+
+.workouts-calendar {
+  margin-top: 14px;
+}
+
+.workouts-cal-header,
+.workouts-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.workouts-cal-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.workouts-cal-header > div {
+  text-align: center;
+  padding: 4px 0;
+}
+
+.workouts-cal-grid {
+  grid-auto-rows: minmax(74px, auto);
+}
+
+.workouts-cal-cell {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 6px 8px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workouts-cal-cell:hover:not(.empty):not(.rest):not(.outside) {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+}
+
+.workouts-cal-cell.empty,
+.workouts-cal-cell.outside {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.03);
+  cursor: default;
+}
+
+.workouts-cal-cell.outside {
+  opacity: 0.3;
+}
+
+.workouts-cal-cell .day-num {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.workouts-cal-cell.today .day-num {
+  color: var(--accent);
+}
+
+.workouts-cal-cell.today {
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.08);
+}
+
+.workouts-cal-cell .cell-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-soft);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.workouts-cal-cell.rest .cell-title {
+  color: var(--muted-2);
+  font-style: italic;
+}
+
+.workouts-cal-cell.completed {
+  background: rgba(77, 214, 168, 0.1);
+  border-color: rgba(77, 214, 168, 0.3);
+}
+
+.workouts-cal-cell.completed .day-num {
+  color: var(--good);
+}
+
+.workouts-cal-cell .completed-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--good);
+  display: grid;
+  place-items: center;
+  color: white;
+}
+
+.workouts-cal-cell .completed-check svg {
+  width: 10px;
+  height: 10px;
+}
+
+@media (max-width: 600px) {
+  .workouts-cal-grid {
+    grid-auto-rows: minmax(58px, auto);
+    gap: 4px;
+  }
+  .workouts-cal-cell {
+    padding: 4px 4px 6px;
+  }
+  .workouts-cal-cell .cell-title {
+    font-size: 10px;
+    -webkit-line-clamp: 1;
+  }
+  .workouts-cal-header {
+    gap: 4px;
+    font-size: 9px;
+  }
+}
+
+/* ===== Create plan modal: style picker ===== */
+
+.plan-style-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.style-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.2s var(--ease);
+  font-family: inherit;
+  text-align: center;
+}
+
+.style-pill:hover {
+  border-color: var(--border-strong);
+  color: var(--text-soft);
+}
+
+.style-pill.active {
+  background: rgba(124, 92, 255, 0.1);
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.12);
+}
+
+.style-pill svg {
+  margin-bottom: 4px;
+}
+
+.style-pill > span:first-of-type {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.style-pill .style-desc {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+@media (max-width: 500px) {
+  .plan-style-picker {
+    grid-template-columns: 1fr;
+  }
+  .style-pill {
+    flex-direction: row;
+    text-align: left;
+    padding: 10px 14px;
+  }
+  .style-pill svg {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .style-pill > span:first-of-type {
+    flex: 1;
+  }
+}
+
+/* ===== AI Coach chat modal ===== */
+
+.coach-modal-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+}
+
+.coach-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.coach-header h2 {
+  margin: 0;
+}
+
+.coach-clear {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.coach-messages {
+  flex: 1;
+  min-height: 240px;
+  max-height: 50vh;
+  overflow-y: auto;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin: 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.coach-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+}
+
+.coach-msg.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.coach-msg.assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.coach-msg .bubble {
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.coach-msg.user .bubble {
+  background: var(--accent-grad);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.coach-msg.assistant .bubble {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+.coach-msg .tool-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(77, 214, 168, 0.12);
+  border: 1px solid rgba(77, 214, 168, 0.3);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--good);
+  font-weight: 600;
+  align-self: flex-start;
+}
+
+.coach-msg .tool-event.error {
+  background: rgba(255, 92, 122, 0.12);
+  border-color: rgba(255, 92, 122, 0.3);
+  color: var(--danger);
+}
+
+.coach-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.coach-thinking {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+.coach-thinking::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(124, 92, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+.coach-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.coach-input-row textarea {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 50px;
+}
+
+.coach-input-row textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.06);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
+}
+
+.coach-input-row textarea::placeholder {
+  color: var(--muted-2);
+}
+
+#coach-send-btn {
+  align-self: stretch;
+  padding: 0 16px;
+}
+
+@media (max-width: 600px) {
+  .coach-input-row {
+    flex-direction: column;
+  }
+  #coach-send-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .coach-messages {
+    max-height: 45vh;
+  }
+}
+
+/* ===== Workout detail modal: exercise rows ===== */
+
+.workout-exercises {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.exercise-block {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.exercise-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.exercise-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+.exercise-target {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.exercise-notes {
+  font-size: 12px;
+  color: var(--muted-2);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.exercise-log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-soft);
+  padding: 4px 0;
+}
+
+.exercise-log-row .set-num {
+  font-weight: 700;
+  color: var(--muted);
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  min-width: 36px;
+}
+
+.exercise-log-row .log-val {
+  font-feature-settings: 'tnum';
+}
+
+.exercise-log-delete {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--muted-2);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.exercise-log-delete:hover {
+  color: var(--danger);
+  background: rgba(255, 92, 122, 0.08);
+}
+
+.exercise-log-form {
+  display: grid;
+  grid-template-columns: 60px 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.exercise-log-form .set-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.exercise-log-form input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  font-feature-settings: 'tnum';
+  min-width: 0;
+}
+
+.exercise-log-form input::placeholder {
+  color: var(--muted-2);
+}
+
+.exercise-log-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.06);
+}
+
+.exercise-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.exercise-log-form .log-add-btn,
+.exercise-log-form .log-skip-btn {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  color: var(--text-soft);
+  padding: 7px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.2s var(--ease);
+  white-space: nowrap;
+}
+
+.exercise-log-form .log-add-btn:hover {
+  background: rgba(124, 92, 255, 0.12);
+  border-color: rgba(124, 92, 255, 0.4);
+  color: white;
+}
+
+.exercise-log-form .log-skip-btn:hover {
+  background: rgba(255, 138, 76, 0.12);
+  border-color: rgba(255, 138, 76, 0.4);
+  color: var(--cal-2);
+}
+
+.exercise-log-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.exercise-log-row.skipped .log-val {
+  color: var(--muted-2);
+  font-style: italic;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.15);
+}
+
+.exercise-log-row.skipped::before {
+  content: '⊘';
+  color: var(--cal);
+  font-size: 14px;
+  margin-right: -4px;
+}
+
+.exercise-swap-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s var(--ease);
+}
+
+.exercise-swap-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(124, 92, 255, 0.08);
+}
+
+.exercise-swap-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== Strava button ===== */
+.btn-strava {
+  background: #fc4c02;
+  border: 1px solid #fc4c02;
+  color: #fff;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s var(--ease);
+}
+
+.btn-strava:hover {
+  background: #e34402;
+  border-color: #e34402;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(252, 76, 2, 0.35);
+}
+
+.btn-strava:active {
+  transform: translateY(0);
+}
+
+.btn-strava:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-strava.connected {
+  background: transparent;
+  color: #fc4c02;
+}
+
+.btn-strava.connected:hover {
+  background: rgba(252, 76, 2, 0.1);
+  color: #fc4c02;
+  box-shadow: none;
+}
+
+@media (max-width: 500px) {
+  .exercise-log-form {
+    grid-template-columns: 50px 1fr 1fr;
+  }
+  .exercise-log-form .log-add-btn,
+  .exercise-log-form .log-skip-btn,
+  .exercise-log-form .log-all-btn {
+    grid-column: 1 / -1;
+  }
+  .exercise-log-buttons {
+    grid-column: 1 / -1;
+  }
+}
+
+/* =================================================================
    Admin tab
    ================================================================= */
 

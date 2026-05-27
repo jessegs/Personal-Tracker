@@ -189,6 +189,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
     if (btn.dataset.tab === 'photos') loadPhotos();
     if (btn.dataset.tab === 'habits') loadHabits();
     if (btn.dataset.tab === 'admin') loadAdminUsers();
+    if (btn.dataset.tab === 'workouts') loadWorkouts();
   });
 });
 
@@ -2379,6 +2380,900 @@ async function deleteHabit(id, name) {
   }
 }
 
+// ==== Workouts ====
+let currentPlan = null;
+let workoutCalMonth = null; // {year, month0}
+let currentWorkoutDetail = null;
+let planStyle = 'bodyweight';
+
+// --- Empty / active state buttons ---
+$('create-plan-btn').addEventListener('click', openCreatePlanModal);
+$('create-plan-btn-2').addEventListener('click', openCreatePlanModal);
+$('delete-plan-btn').addEventListener('click', deletePlan);
+
+// --- Create plan modal ---
+const createPlanModal = $('create-plan-modal');
+$('create-plan-close').addEventListener('click', closeCreatePlanModal);
+$('create-plan-cancel').addEventListener('click', closeCreatePlanModal);
+$('create-plan-form').addEventListener('submit', submitCreatePlan);
+
+createPlanModal.addEventListener('click', (e) => {
+  if (e.target === createPlanModal) closeCreatePlanModal();
+});
+
+document.querySelectorAll('#plan-style-picker .style-pill').forEach((pill) => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('#plan-style-picker .style-pill').forEach((p) =>
+      p.classList.remove('active')
+    );
+    pill.classList.add('active');
+    planStyle = pill.dataset.style;
+  });
+});
+
+function openCreatePlanModal() {
+  // Default dates: today → 8 weeks out
+  const t = new Date();
+  const end = new Date(t);
+  end.setDate(t.getDate() + 7 * 8 - 1);
+  $('plan-start-date').value = todayISO();
+  $('plan-end-date').value = isoLocal(end);
+  $('plan-goal').value = '';
+  document.querySelectorAll('#plan-style-picker .style-pill').forEach((p) => {
+    p.classList.toggle('active', p.dataset.style === 'bodyweight');
+  });
+  planStyle = 'bodyweight';
+  setStatus($('create-plan-status'), '');
+  createPlanModal.hidden = false;
+  setTimeout(() => $('plan-goal').focus(), 50);
+}
+
+function closeCreatePlanModal() {
+  createPlanModal.hidden = true;
+}
+
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function submitCreatePlan(e) {
+  e.preventDefault();
+  const goal = $('plan-goal').value.trim();
+  const startDate = $('plan-start-date').value;
+  const endDate = $('plan-end-date').value;
+  if (!goal) {
+    setStatus($('create-plan-status'), 'Goal required', 'error');
+    return;
+  }
+  if (!startDate || !endDate) {
+    setStatus($('create-plan-status'), 'Both dates required', 'error');
+    return;
+  }
+  $('create-plan-submit').disabled = true;
+  setStatus($('create-plan-status'), 'Generating plan with Claude…');
+  try {
+    const res = await fetch('/api/workouts/plans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        goal,
+        style: planStyle,
+        start_date: startDate,
+        end_date: endDate,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Plan creation failed');
+    closeCreatePlanModal();
+    await loadWorkouts();
+  } catch (err) {
+    setStatus($('create-plan-status'), err.message, 'error');
+  } finally {
+    $('create-plan-submit').disabled = false;
+  }
+}
+
+async function deletePlan() {
+  if (!currentPlan) return;
+  if (!confirm(`Delete plan "${currentPlan.name}"? All workouts and logs in this plan are removed.`)) return;
+  try {
+    await fetch(`/api/workouts/plans/${currentPlan.id}`, { method: 'DELETE' });
+    await loadWorkouts();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// --- Load + render ---
+
+async function loadWorkouts() {
+  try {
+    const res = await fetch('/api/workouts/plans');
+    if (!res.ok) return;
+    const plans = await res.json();
+    if (plans.length === 0) {
+      currentPlan = null;
+      $('workouts-empty').hidden = false;
+      $('workouts-active').hidden = true;
+      return;
+    }
+    // Use most recent plan
+    currentPlan = plans[0];
+    $('workouts-empty').hidden = true;
+    $('workouts-active').hidden = false;
+    $('workouts-plan-name').textContent = currentPlan.name;
+    $('workouts-plan-summary').textContent = currentPlan.summary || '';
+
+    // Initialize calendar to start month of current plan (or today if plan started long ago)
+    if (!workoutCalMonth) {
+      const t = new Date();
+      const startD = parseISOLocal(currentPlan.start_date);
+      const showD = t >= startD && t <= parseISOLocal(currentPlan.end_date) ? t : startD;
+      workoutCalMonth = { year: showD.getFullYear(), month0: showD.getMonth() };
+    }
+    await renderWorkoutCalendar();
+  } catch (err) {
+    console.error('Failed to load workouts', err);
+  }
+}
+
+function parseISOLocal(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+$('workouts-prev-month').addEventListener('click', () => {
+  if (!workoutCalMonth) return;
+  workoutCalMonth.month0 -= 1;
+  if (workoutCalMonth.month0 < 0) {
+    workoutCalMonth.month0 = 11;
+    workoutCalMonth.year -= 1;
+  }
+  renderWorkoutCalendar();
+});
+
+$('workouts-next-month').addEventListener('click', () => {
+  if (!workoutCalMonth) return;
+  workoutCalMonth.month0 += 1;
+  if (workoutCalMonth.month0 > 11) {
+    workoutCalMonth.month0 = 0;
+    workoutCalMonth.year += 1;
+  }
+  renderWorkoutCalendar();
+});
+
+async function renderWorkoutCalendar() {
+  const { year, month0 } = workoutCalMonth;
+  const monthName = new Date(year, month0, 1).toLocaleString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+  $('workouts-month-label').textContent = monthName;
+
+  // Fetch workouts in this month
+  const first = new Date(year, month0, 1);
+  const last = new Date(year, month0 + 1, 0);
+  const from = isoLocal(first);
+  const to = isoLocal(last);
+  let workouts = [];
+  try {
+    const res = await fetch(`/api/workouts?from=${from}&to=${to}`);
+    if (res.ok) workouts = await res.json();
+  } catch (err) {
+    console.error(err);
+  }
+  const byDate = new Map(workouts.map((w) => [w.date, w]));
+
+  // Build the grid: first row starts on the first day, padded with empty cells before day 1
+  const grid = $('workouts-cal-grid');
+  grid.innerHTML = '';
+  const startDow = first.getDay();
+  const daysInMonth = last.getDate();
+  const today = isoLocal(new Date());
+
+  // Outside cells before day 1
+  for (let i = 0; i < startDow; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'workouts-cal-cell outside';
+    grid.appendChild(cell);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month0, day);
+    const dateStr = isoLocal(date);
+    const w = byDate.get(dateStr);
+    const cell = document.createElement('div');
+    cell.className = 'workouts-cal-cell';
+    if (dateStr === today) cell.classList.add('today');
+    if (w) {
+      if (w.completed) cell.classList.add('completed');
+      if ((w.focus || '').toLowerCase() === 'rest' || w.exercise_count === 0) {
+        cell.classList.add('rest');
+      } else {
+        cell.addEventListener('click', () => openWorkoutDetail(w.id));
+      }
+    } else {
+      cell.classList.add('empty');
+    }
+
+    const dayNum = document.createElement('div');
+    dayNum.className = 'day-num';
+    dayNum.textContent = day;
+    cell.appendChild(dayNum);
+
+    if (w) {
+      const title = document.createElement('div');
+      title.className = 'cell-title';
+      title.textContent = w.title;
+      cell.appendChild(title);
+      if (w.completed) {
+        const chk = document.createElement('div');
+        chk.className = 'completed-check';
+        chk.innerHTML =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+        cell.appendChild(chk);
+      }
+    }
+    grid.appendChild(cell);
+  }
+}
+
+// --- Workout detail modal ---
+const workoutModal = $('workout-modal');
+$('workout-modal-close').addEventListener('click', closeWorkoutModal);
+$('workout-modal-cancel').addEventListener('click', closeWorkoutModal);
+$('workout-complete-btn').addEventListener('click', toggleWorkoutComplete);
+
+workoutModal.addEventListener('click', (e) => {
+  if (e.target === workoutModal) closeWorkoutModal();
+});
+
+async function openWorkoutDetail(id) {
+  try {
+    const res = await fetch(`/api/workouts/${id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    currentWorkoutDetail = data;
+    setStatus($('workout-modal-status'), '');
+    renderWorkoutDetail();
+    workoutModal.hidden = false;
+    updateWorkoutStravaBtn();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function closeWorkoutModal() {
+  workoutModal.hidden = true;
+  currentWorkoutDetail = null;
+  renderWorkoutCalendar();
+}
+
+function renderWorkoutDetail() {
+  const w = currentWorkoutDetail;
+  $('workout-modal-title').textContent = w.title;
+  const d = parseISOLocal(w.date);
+  $('workout-modal-date').textContent = d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  $('workout-complete-btn').innerHTML = w.completed
+    ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg> Mark incomplete'
+    : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Mark complete';
+
+  const wrap = $('workout-exercises');
+  wrap.innerHTML = '';
+
+  if (!w.exercises || w.exercises.length === 0) {
+    const rest = document.createElement('div');
+    rest.className = 'empty';
+    rest.textContent = 'Rest day — no exercises planned.';
+    wrap.appendChild(rest);
+    return;
+  }
+
+  for (let i = 0; i < w.exercises.length; i++) {
+    const ex = w.exercises[i];
+    const block = document.createElement('div');
+    block.className = 'exercise-block';
+    block.dataset.idx = i;
+
+    const header = document.createElement('div');
+    header.className = 'exercise-block-header';
+
+    const main = document.createElement('div');
+    main.innerHTML = `
+      <div class="exercise-name">${escapeHtml(ex.name)}</div>
+      <div class="exercise-target">${ex.target_sets ? ex.target_sets + ' × ' : ''}${escapeHtml(ex.target_reps || '')}${ex.target_load ? ' · ' + escapeHtml(ex.target_load) : ''}${ex.rest_seconds ? ' · rest ' + ex.rest_seconds + 's' : ''}</div>
+      ${ex.notes ? `<div class="exercise-notes">${escapeHtml(ex.notes)}</div>` : ''}
+    `;
+    header.appendChild(main);
+
+    // Swap button on the right
+    const swapBtn = document.createElement('button');
+    swapBtn.type = 'button';
+    swapBtn.className = 'exercise-swap-btn';
+    swapBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg> Swap';
+    swapBtn.title = 'Get an AI-suggested alternative for this exercise';
+    swapBtn.addEventListener('click', () => swapExercise(i, swapBtn));
+    header.appendChild(swapBtn);
+
+    block.appendChild(header);
+
+    // Sets list — render every target set, plus any extra logs beyond target_sets
+    const exLogs = w.logs.filter((l) => l.exercise_index === i);
+    const logBySetNum = new Map(exLogs.map((l) => [l.set_number, l]));
+    const targetSets = Number(ex.target_sets) || 0;
+    const maxLoggedSet = exLogs.length ? Math.max(...exLogs.map((l) => l.set_number)) : 0;
+    const totalRows = Math.max(targetSets, maxLoggedSet);
+
+    const setsWrap = document.createElement('div');
+    setsWrap.className = 'exercise-sets';
+
+    for (let setNum = 1; setNum <= totalRows; setNum++) {
+      const existing = logBySetNum.get(setNum);
+      if (existing) {
+        // Already-logged row
+        const row = document.createElement('div');
+        row.className = 'exercise-log-row' + (existing.skipped ? ' skipped' : '');
+        const parts = [];
+        if (existing.skipped) {
+          parts.push('skipped');
+        } else {
+          if (existing.reps != null) parts.push(`${existing.reps} reps`);
+          if (existing.weight != null) parts.push(`${existing.weight} lbs`);
+          if (existing.duration_seconds != null) parts.push(`${existing.duration_seconds}s`);
+        }
+        row.innerHTML = `
+          <span class="set-num">Set ${existing.set_number}</span>
+          <span class="log-val">${parts.join(' · ') || '—'}</span>
+        `;
+        const del = document.createElement('button');
+        del.className = 'exercise-log-delete';
+        del.type = 'button';
+        del.textContent = '×';
+        del.title = 'Delete set';
+        del.addEventListener('click', () => deleteLog(existing.id));
+        row.appendChild(del);
+        setsWrap.appendChild(row);
+      } else {
+        // Empty set: inputs + Log + Skip
+        const formRow = document.createElement('div');
+        formRow.className = 'exercise-log-form';
+        formRow.innerHTML = `
+          <span class="set-label">Set ${setNum}</span>
+          <input type="number" class="log-reps" placeholder="reps" min="0" step="1" />
+          <input type="number" class="log-weight" placeholder="lbs" min="0" step="0.5" />
+        `;
+        const btnsWrap = document.createElement('div');
+        btnsWrap.className = 'exercise-log-buttons';
+
+        const logBtn = document.createElement('button');
+        logBtn.type = 'button';
+        logBtn.className = 'log-add-btn';
+        logBtn.textContent = 'Log';
+        logBtn.addEventListener('click', () => {
+          const repsEl = formRow.querySelector('.log-reps');
+          const weightEl = formRow.querySelector('.log-weight');
+          logSet(i, setNum, repsEl.value, weightEl.value);
+        });
+        btnsWrap.appendChild(logBtn);
+
+        const skipBtn = document.createElement('button');
+        skipBtn.type = 'button';
+        skipBtn.className = 'log-skip-btn';
+        skipBtn.textContent = 'Skip';
+        skipBtn.title = `Mark set ${setNum} as skipped`;
+        skipBtn.addEventListener('click', () => skipSet(i, setNum));
+        btnsWrap.appendChild(skipBtn);
+
+        formRow.appendChild(btnsWrap);
+        setsWrap.appendChild(formRow);
+      }
+    }
+
+    if (totalRows === 0) {
+      // No target sets defined (e.g., AI returned 0 — unlikely). Show a single open row.
+      const formRow = document.createElement('div');
+      formRow.className = 'exercise-log-form';
+      formRow.innerHTML = `
+        <span class="set-label">Set 1</span>
+        <input type="number" class="log-reps" placeholder="reps" min="0" step="1" />
+        <input type="number" class="log-weight" placeholder="lbs" min="0" step="0.5" />
+      `;
+      const btnsWrap = document.createElement('div');
+      btnsWrap.className = 'exercise-log-buttons';
+      const logBtn = document.createElement('button');
+      logBtn.type = 'button';
+      logBtn.className = 'log-add-btn';
+      logBtn.textContent = 'Log';
+      logBtn.addEventListener('click', () => {
+        const repsEl = formRow.querySelector('.log-reps');
+        const weightEl = formRow.querySelector('.log-weight');
+        logSet(i, 1, repsEl.value, weightEl.value);
+      });
+      btnsWrap.appendChild(logBtn);
+      const skipBtn = document.createElement('button');
+      skipBtn.type = 'button';
+      skipBtn.className = 'log-skip-btn';
+      skipBtn.textContent = 'Skip';
+      skipBtn.addEventListener('click', () => skipSet(i, 1));
+      btnsWrap.appendChild(skipBtn);
+      formRow.appendChild(btnsWrap);
+      setsWrap.appendChild(formRow);
+    }
+
+    block.appendChild(setsWrap);
+    wrap.appendChild(block);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function logSet(exerciseIndex, setNumber, reps, weight) {
+  if (!currentWorkoutDetail) return;
+  try {
+    const res = await fetch(`/api/workouts/${currentWorkoutDetail.id}/logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        exercise_index: exerciseIndex,
+        set_number: setNumber,
+        reps: reps === '' ? null : Number(reps),
+        weight: weight === '' ? null : Number(weight),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Log failed');
+    // Refetch and re-render
+    const detail = await fetch(`/api/workouts/${currentWorkoutDetail.id}`).then((r) => r.json());
+    currentWorkoutDetail = detail;
+    renderWorkoutDetail();
+  } catch (err) {
+    setStatus($('workout-modal-status'), err.message, 'error');
+  }
+}
+
+async function deleteLog(logId) {
+  try {
+    await fetch(`/api/workouts/logs/${logId}`, { method: 'DELETE' });
+    const detail = await fetch(`/api/workouts/${currentWorkoutDetail.id}`).then((r) => r.json());
+    currentWorkoutDetail = detail;
+    renderWorkoutDetail();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function skipSet(exerciseIndex, setNumber) {
+  if (!currentWorkoutDetail) return;
+  try {
+    const res = await fetch(`/api/workouts/${currentWorkoutDetail.id}/logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        exercise_index: exerciseIndex,
+        set_number: setNumber,
+        skipped: true,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Skip failed');
+    const detail = await fetch(`/api/workouts/${currentWorkoutDetail.id}`).then((r) => r.json());
+    currentWorkoutDetail = detail;
+    renderWorkoutDetail();
+  } catch (err) {
+    setStatus($('workout-modal-status'), err.message, 'error');
+  }
+}
+
+async function swapExercise(exerciseIndex, btnEl) {
+  if (!currentWorkoutDetail) return;
+  const original = currentWorkoutDetail.exercises[exerciseIndex];
+  if (!original) return;
+  const reason = prompt(
+    `Swap "${original.name}" for an AI-suggested alternative?\n\nOptional: enter a reason (e.g., "no pull-up bar today" or "left shoulder bothering me"). Leave blank to just get a generic substitute.`,
+    ''
+  );
+  if (reason === null) return; // user cancelled
+
+  const originalText = btnEl.innerHTML;
+  btnEl.disabled = true;
+  btnEl.innerHTML = 'Asking AI…';
+  try {
+    const res = await fetch(
+      `/api/workouts/${currentWorkoutDetail.id}/exercises/${exerciseIndex}/swap`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Swap failed');
+    const s = data.suggestion;
+    const summary = `Replace "${original.name}"\n     with "${s.name}"\n\nTarget: ${s.target_sets} × ${s.target_reps} @ ${s.target_load}\nRest: ${s.rest_seconds}s\n${s.notes ? '\nNotes: ' + s.notes : ''}\n${s.rationale ? '\nWhy: ' + s.rationale : ''}\n\nApply this swap?  (logs for this exercise will be cleared)`;
+    if (!confirm(summary)) return;
+
+    const applyRes = await fetch(
+      `/api/workouts/${currentWorkoutDetail.id}/exercises/${exerciseIndex}/apply-swap`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suggestion: s }),
+      }
+    );
+    const applyData = await applyRes.json();
+    if (!applyRes.ok) throw new Error(applyData.error || 'Apply failed');
+
+    const detail = await fetch(`/api/workouts/${currentWorkoutDetail.id}`).then((r) => r.json());
+    currentWorkoutDetail = detail;
+    renderWorkoutDetail();
+    renderWorkoutCalendar();
+  } catch (err) {
+    setStatus($('workout-modal-status'), err.message, 'error');
+  } finally {
+    btnEl.disabled = false;
+    btnEl.innerHTML = originalText;
+  }
+}
+
+async function toggleWorkoutComplete() {
+  if (!currentWorkoutDetail) return;
+  try {
+    const res = await fetch(`/api/workouts/${currentWorkoutDetail.id}/complete`, {
+      method: 'POST',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Toggle failed');
+    currentWorkoutDetail.completed = data.completed;
+    renderWorkoutDetail();
+    updateWorkoutStravaBtn();
+  } catch (err) {
+    setStatus($('workout-modal-status'), err.message, 'error');
+  }
+}
+
+// ==== Strava integration ====
+let stravaState = { enabled: false, connected: false, athlete: null };
+
+async function loadStravaStatus() {
+  try {
+    const res = await fetch('/api/strava/status');
+    if (!res.ok) {
+      stravaState = { enabled: false, connected: false, athlete: null };
+    } else {
+      stravaState = await res.json();
+    }
+  } catch {
+    stravaState = { enabled: false, connected: false, athlete: null };
+  }
+  renderStravaButtons();
+}
+
+function renderStravaButtons() {
+  const btn = $('strava-connect-btn');
+  if (btn) {
+    if (!stravaState.enabled) {
+      btn.hidden = true;
+    } else {
+      btn.hidden = false;
+      if (stravaState.connected) {
+        const name =
+          (stravaState.athlete && stravaState.athlete.firstname) || 'Strava';
+        btn.classList.add('connected');
+        $('strava-connect-label').textContent = `Disconnect ${name}`;
+        btn.title = 'Disconnect your Strava account';
+      } else {
+        btn.classList.remove('connected');
+        $('strava-connect-label').textContent = 'Connect Strava';
+        btn.title = 'Connect your Strava account to push workouts';
+      }
+    }
+  }
+  updateWorkoutStravaBtn();
+}
+
+function updateWorkoutStravaBtn() {
+  const btn = $('workout-strava-btn');
+  if (!btn) return;
+  // Show whenever the modal is open with a real (non-rest) workout and Strava
+  // is connected. The user can push even if they forgot to "Mark complete" —
+  // the API call just creates a new activity, which is reversible on Strava.
+  const show =
+    stravaState.enabled &&
+    stravaState.connected &&
+    currentWorkoutDetail &&
+    (currentWorkoutDetail.exercises || []).length > 0;
+  btn.hidden = !show;
+}
+
+async function handleStravaButtonClick() {
+  if (!stravaState.enabled) return;
+  if (stravaState.connected) {
+    const who =
+      (stravaState.athlete && stravaState.athlete.firstname) || 'your account';
+    if (!confirm(`Disconnect Strava (${who})?\n\nYou can reconnect anytime.`)) return;
+    try {
+      const res = await fetch('/api/strava/disconnect', { method: 'POST' });
+      if (!res.ok) throw new Error('Disconnect failed');
+      await loadStravaStatus();
+    } catch (err) {
+      alert('Failed to disconnect: ' + err.message);
+    }
+  } else {
+    try {
+      const res = await fetch('/api/strava/auth-url');
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || 'Failed to start auth');
+      // Full-page redirect so Strava's callback can bring us right back.
+      window.location.href = data.url;
+    } catch (err) {
+      alert('Failed to start Strava connection: ' + err.message);
+    }
+  }
+}
+
+async function pushCurrentWorkoutToStrava() {
+  if (!currentWorkoutDetail) return;
+  const btn = $('workout-strava-btn');
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg> Uploading…';
+  setStatus($('workout-modal-status'), '');
+  try {
+    const res = await fetch(
+      `/api/workouts/${currentWorkoutDetail.id}/push-to-strava`,
+      { method: 'POST' }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Push failed');
+    setStatus(
+      $('workout-modal-status'),
+      `Uploaded! `,
+      'success'
+    );
+    const link = document.createElement('a');
+    link.href = data.activity_url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'View on Strava →';
+    link.style.color = '#fc4c02';
+    link.style.fontWeight = '600';
+    link.style.textDecoration = 'none';
+    $('workout-modal-status').appendChild(link);
+  } catch (err) {
+    setStatus($('workout-modal-status'), err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+}
+
+// Wire up Strava button handlers (these IDs exist in the DOM from page load)
+const _stravaConnectBtn = $('strava-connect-btn');
+if (_stravaConnectBtn) _stravaConnectBtn.addEventListener('click', handleStravaButtonClick);
+const _workoutStravaBtn = $('workout-strava-btn');
+if (_workoutStravaBtn) _workoutStravaBtn.addEventListener('click', pushCurrentWorkoutToStrava);
+
+// On page load, surface OAuth return state (?strava=connected or ?strava=error)
+(function handleStravaReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const flag = params.get('strava');
+  if (!flag) return;
+  // Strip the query so a refresh doesn't re-trigger the toast
+  const cleanUrl = window.location.pathname + window.location.hash;
+  window.history.replaceState({}, '', cleanUrl);
+  setTimeout(() => {
+    if (flag === 'connected') {
+      // Switch to workouts tab so the user sees the connected state
+      const wtab = document.querySelector('.tab[data-tab="workouts"]');
+      if (wtab) wtab.click();
+      alert('Strava connected! You can now push completed workouts to your Strava feed.');
+    } else if (flag === 'error') {
+      const reason = params.get('reason') || 'unknown';
+      alert(`Strava connection failed (${reason}). Please try again.`);
+    }
+  }, 400);
+})();
+
+// ==== AI Coach chat ====
+const coachModal = $('coach-modal');
+$('ai-coach-btn').addEventListener('click', openCoachModal);
+$('coach-modal-close').addEventListener('click', closeCoachModal);
+$('coach-clear-btn').addEventListener('click', clearCoachConversation);
+$('coach-form').addEventListener('submit', sendCoachMessage);
+
+coachModal.addEventListener('click', (e) => {
+  if (e.target === coachModal) closeCoachModal();
+});
+
+$('coach-input').addEventListener('keydown', (e) => {
+  // Ctrl/Cmd+Enter sends; Enter alone is a newline
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    $('coach-form').requestSubmit();
+  }
+});
+
+async function openCoachModal() {
+  if (!currentPlan) return;
+  coachModal.hidden = false;
+  await loadCoachHistory();
+  setTimeout(() => $('coach-input').focus(), 100);
+}
+
+function closeCoachModal() {
+  coachModal.hidden = true;
+}
+
+async function loadCoachHistory() {
+  if (!currentPlan) return;
+  try {
+    const res = await fetch(`/api/workouts/plans/${currentPlan.id}/coach/messages`);
+    if (!res.ok) return;
+    const messages = await res.json();
+    renderCoachMessages(messages);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderCoachMessages(messages) {
+  const wrap = $('coach-messages');
+  wrap.innerHTML = '';
+
+  if (messages.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'coach-empty';
+    empty.textContent = 'Start a conversation — ask for tips or request changes to your plan.';
+    wrap.appendChild(empty);
+    return;
+  }
+
+  for (const msg of messages) {
+    const content = msg.content;
+    if (msg.role === 'user') {
+      // User messages can be a plain string (typed by user) or an array of tool_result blocks
+      if (typeof content === 'string') {
+        appendCoachBubble('user', content);
+      } else if (Array.isArray(content)) {
+        // tool_result blocks — we already showed the tool_use event from the assistant turn,
+        // so we don't render results separately. (Skip.)
+      }
+    } else if (msg.role === 'assistant') {
+      // Assistant content is an array of blocks: text, tool_use, etc.
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'text' && block.text) {
+            appendCoachBubble('assistant', block.text);
+          } else if (block.type === 'tool_use') {
+            appendCoachToolEvent(block);
+          }
+        }
+      } else if (typeof content === 'string') {
+        appendCoachBubble('assistant', content);
+      }
+    }
+  }
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function appendCoachBubble(role, text) {
+  const wrap = $('coach-messages');
+  const msg = document.createElement('div');
+  msg.className = `coach-msg ${role}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  msg.appendChild(bubble);
+  wrap.appendChild(msg);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function appendCoachToolEvent(toolUse, isError = false) {
+  const wrap = $('coach-messages');
+  const msg = document.createElement('div');
+  msg.className = 'coach-msg assistant';
+  const event = document.createElement('div');
+  event.className = 'tool-event' + (isError ? ' error' : '');
+  let label = '';
+  if (toolUse.name === 'update_workout') {
+    label = `Updated workout #${toolUse.input.workout_id}`;
+  } else if (toolUse.name === 'update_recurring_workout') {
+    label = `Updated every future ${dowNameLong(toolUse.input.day_of_week)} workout`;
+  } else {
+    label = `Used tool: ${toolUse.name}`;
+  }
+  event.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> ${escapeHtml(label)}`;
+  msg.appendChild(event);
+  wrap.appendChild(msg);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function dowNameLong(dow) {
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][Number(dow)] || '';
+}
+
+function showCoachThinking() {
+  const wrap = $('coach-messages');
+  const t = document.createElement('div');
+  t.id = 'coach-thinking';
+  t.className = 'coach-thinking';
+  t.textContent = 'Thinking…';
+  wrap.appendChild(t);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function hideCoachThinking() {
+  const t = $('coach-thinking');
+  if (t) t.remove();
+}
+
+async function sendCoachMessage(e) {
+  e.preventDefault();
+  if (!currentPlan) return;
+  const input = $('coach-input');
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+  $('coach-send-btn').disabled = true;
+
+  // Optimistically show user bubble
+  // Remove the "Start a conversation" empty state if present
+  const empty = $('coach-messages').querySelector('.coach-empty');
+  if (empty) empty.remove();
+  appendCoachBubble('user', message);
+  showCoachThinking();
+
+  try {
+    const res = await fetch(`/api/workouts/plans/${currentPlan.id}/coach/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    hideCoachThinking();
+    const data = await res.json();
+    if (!res.ok) {
+      appendCoachBubble('assistant', `(error: ${data.error || 'Coach failed'})`);
+      return;
+    }
+    // Reload from server so we render correctly (including tool events)
+    await loadCoachHistory();
+    // If modifications happened, refresh the calendar
+    if (data.modifications && data.modifications.length > 0) {
+      renderWorkoutCalendar();
+    }
+  } catch (err) {
+    hideCoachThinking();
+    appendCoachBubble('assistant', `(error: ${err.message || 'Network error'})`);
+  } finally {
+    $('coach-send-btn').disabled = false;
+    input.focus();
+  }
+}
+
+async function clearCoachConversation() {
+  if (!currentPlan) return;
+  if (!confirm('Clear the entire coach conversation? This cannot be undone.')) return;
+  try {
+    await fetch(`/api/workouts/plans/${currentPlan.id}/coach/messages`, { method: 'DELETE' });
+    await loadCoachHistory();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 // ==== Admin ====
 
 $('open-admin-btn').addEventListener('click', () => {
@@ -2530,6 +3425,7 @@ function enterApp() {
   loadCheckIn();
   loadMeasurements();
   loadMealTemplates();
+  loadStravaStatus();
 }
 
 (async () => {

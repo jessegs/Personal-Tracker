@@ -131,6 +131,10 @@ db.exec(
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users(username COLLATE NOCASE)'
 );
 
+if (colExists('workout_logs', 'workout_id') && !colExists('workout_logs', 'skipped')) {
+  db.exec('ALTER TABLE workout_logs ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0');
+}
+
 if (!colExists('entries', 'user_id')) {
   db.exec('ALTER TABLE entries ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE');
   db.exec('CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries(user_id, date)');
@@ -219,6 +223,75 @@ if (!colExists('goals', 'user_id')) {
   db.exec('DROP TABLE goals');
   db.exec('ALTER TABLE goals_new RENAME TO goals');
 }
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS workout_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    goal TEXT NOT NULL,
+    style TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    summary TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_workout_plans_user ON workout_plans(user_id);
+
+  CREATE TABLE IF NOT EXISTS workouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plan_id INTEGER REFERENCES workout_plans(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    title TEXT NOT NULL,
+    focus TEXT,
+    exercises_json TEXT NOT NULL DEFAULT '[]',
+    completed INTEGER NOT NULL DEFAULT 0,
+    completed_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON workouts(user_id, date);
+  CREATE INDEX IF NOT EXISTS idx_workouts_plan ON workouts(plan_id);
+
+  CREATE TABLE IF NOT EXISTS strava_connections (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    athlete_id INTEGER,
+    athlete_firstname TEXT,
+    athlete_lastname TEXT,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    scope TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS workout_coach_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plan_id INTEGER NOT NULL REFERENCES workout_plans(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_coach_messages_plan ON workout_coach_messages(plan_id, id);
+
+  CREATE TABLE IF NOT EXISTS workout_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workout_id INTEGER NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+    exercise_index INTEGER NOT NULL,
+    exercise_name TEXT NOT NULL,
+    set_number INTEGER NOT NULL,
+    reps INTEGER,
+    weight REAL,
+    duration_seconds INTEGER,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_workout_logs_workout ON workout_logs(workout_id);
+`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS meal_templates (
@@ -913,6 +986,1107 @@ app.post('/api/goals', requireAuth, (req, res) => {
   );
   const row = db.prepare('SELECT * FROM goals WHERE user_id = ?').get(req.userId);
   res.json(row);
+});
+
+// ===== Strava integration =====
+const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID || '';
+const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET || '';
+const STRAVA_REDIRECT_BASE = process.env.STRAVA_REDIRECT_BASE || '';
+const STRAVA_SCOPE = 'activity:write,read';
+
+function stravaEnabled() {
+  return Boolean(STRAVA_CLIENT_ID && STRAVA_CLIENT_SECRET && STRAVA_REDIRECT_BASE);
+}
+
+// Short-lived signed state token tied to the user id (15 min)
+function makeStravaState(userId) {
+  const exp = Math.floor(Date.now() / 1000) + 15 * 60;
+  const payload = `${userId}.${exp}`;
+  const hmac = require('crypto')
+    .createHmac('sha256', STRAVA_CLIENT_SECRET || 'fallback')
+    .update(payload)
+    .digest('hex')
+    .slice(0, 32);
+  return `${payload}.${hmac}`;
+}
+
+function verifyStravaState(state) {
+  if (!state || typeof state !== 'string') return null;
+  const parts = state.split('.');
+  if (parts.length !== 3) return null;
+  const [uid, exp, sig] = parts;
+  const expected = require('crypto')
+    .createHmac('sha256', STRAVA_CLIENT_SECRET || 'fallback')
+    .update(`${uid}.${exp}`)
+    .digest('hex')
+    .slice(0, 32);
+  if (sig !== expected) return null;
+  if (Number(exp) < Math.floor(Date.now() / 1000)) return null;
+  const userId = Number(uid);
+  return Number.isInteger(userId) ? userId : null;
+}
+
+async function refreshStravaToken(row) {
+  const resp = await fetch('https://www.strava.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: STRAVA_CLIENT_ID,
+      client_secret: STRAVA_CLIENT_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: row.refresh_token,
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Strava token refresh failed: ${resp.status} ${text.slice(0, 200)}`);
+  }
+  const data = await resp.json();
+  db.prepare(
+    `UPDATE strava_connections SET access_token = ?, refresh_token = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`
+  ).run(data.access_token, data.refresh_token, data.expires_at, row.user_id);
+  return { ...row, access_token: data.access_token, refresh_token: data.refresh_token, expires_at: data.expires_at };
+}
+
+async function getStravaToken(userId) {
+  const row = db.prepare('SELECT * FROM strava_connections WHERE user_id = ?').get(userId);
+  if (!row) return null;
+  if (row.expires_at && row.expires_at * 1000 < Date.now() + 60 * 1000) {
+    return await refreshStravaToken(row);
+  }
+  return row;
+}
+
+app.get('/api/strava/status', requireAuth, (req, res) => {
+  const enabled = stravaEnabled();
+  const row = db
+    .prepare(
+      'SELECT athlete_id, athlete_firstname, athlete_lastname, scope, expires_at FROM strava_connections WHERE user_id = ?'
+    )
+    .get(req.userId);
+  res.json({
+    enabled,
+    connected: !!row,
+    athlete: row
+      ? {
+          id: row.athlete_id,
+          name: [row.athlete_firstname, row.athlete_lastname].filter(Boolean).join(' '),
+        }
+      : null,
+  });
+});
+
+app.get('/api/strava/auth-url', requireAuth, (req, res) => {
+  if (!stravaEnabled()) {
+    return res.status(503).json({ error: 'Strava is not configured on this server' });
+  }
+  const state = makeStravaState(req.userId);
+  const params = new URLSearchParams({
+    client_id: STRAVA_CLIENT_ID,
+    redirect_uri: `${STRAVA_REDIRECT_BASE}/api/strava/callback`,
+    response_type: 'code',
+    approval_prompt: 'auto',
+    scope: STRAVA_SCOPE,
+    state,
+  });
+  res.json({ url: `https://www.strava.com/oauth/authorize?${params}` });
+});
+
+// Strava redirects here after user authorizes — NOT behind requireAuth because
+// the redirect is browser-driven via state token, not API session
+app.get('/api/strava/callback', async (req, res) => {
+  if (!stravaEnabled()) {
+    return res.status(503).send('Strava is not configured on this server.');
+  }
+  const { code, state, error } = req.query;
+  if (error) {
+    return res.redirect('/?strava=error&reason=' + encodeURIComponent(String(error)));
+  }
+  const userId = verifyStravaState(state);
+  if (!userId || !code) {
+    return res.redirect('/?strava=error&reason=invalid_state');
+  }
+  try {
+    const resp = await fetch('https://www.strava.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: STRAVA_CLIENT_ID,
+        client_secret: STRAVA_CLIENT_SECRET,
+        code,
+        grant_type: 'authorization_code',
+      }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      console.error('Strava token exchange failed:', resp.status, text);
+      return res.redirect('/?strava=error&reason=token_exchange');
+    }
+    const data = await resp.json();
+    const athlete = data.athlete || {};
+    db.prepare(
+      `INSERT INTO strava_connections (user_id, athlete_id, athlete_firstname, athlete_lastname, access_token, refresh_token, expires_at, scope)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         athlete_id = excluded.athlete_id,
+         athlete_firstname = excluded.athlete_firstname,
+         athlete_lastname = excluded.athlete_lastname,
+         access_token = excluded.access_token,
+         refresh_token = excluded.refresh_token,
+         expires_at = excluded.expires_at,
+         scope = excluded.scope,
+         updated_at = CURRENT_TIMESTAMP`
+    ).run(
+      userId,
+      athlete.id || null,
+      athlete.firstname || null,
+      athlete.lastname || null,
+      data.access_token,
+      data.refresh_token,
+      data.expires_at,
+      data.scope || STRAVA_SCOPE
+    );
+    res.redirect('/?strava=connected');
+  } catch (err) {
+    console.error('Strava callback error:', err);
+    res.redirect('/?strava=error&reason=server');
+  }
+});
+
+app.post('/api/strava/disconnect', requireAuth, async (req, res) => {
+  const row = db.prepare('SELECT access_token FROM strava_connections WHERE user_id = ?').get(req.userId);
+  if (row && row.access_token) {
+    // Best-effort revoke at Strava (no need to fail if it doesn't respond)
+    try {
+      await fetch('https://www.strava.com/oauth/deauthorize', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${row.access_token}` },
+      });
+    } catch (_) {}
+  }
+  db.prepare('DELETE FROM strava_connections WHERE user_id = ?').run(req.userId);
+  res.json({ ok: true });
+});
+
+// Push a completed workout as a Strava activity
+app.post('/api/workouts/:id/push-to-strava', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  if (!stravaEnabled()) {
+    return res.status(503).json({ error: 'Strava is not configured on this server' });
+  }
+  const tokenRow = await getStravaToken(req.userId).catch((e) => {
+    throw e;
+  });
+  if (!tokenRow) return res.status(400).json({ error: 'Strava not connected' });
+
+  const w = db
+    .prepare('SELECT * FROM workouts WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!w) return res.status(404).json({ error: 'workout not found' });
+  const plan = w.plan_id
+    ? db.prepare('SELECT style FROM workout_plans WHERE id = ?').get(w.plan_id)
+    : null;
+  const style = (plan && plan.style) || 'gym';
+
+  const exercises = JSON.parse(w.exercises_json || '[]');
+  const logs = db
+    .prepare(
+      `SELECT exercise_index, set_number, reps, weight, duration_seconds, skipped
+       FROM workout_logs WHERE workout_id = ? AND user_id = ?
+       ORDER BY exercise_index ASC, set_number ASC, id ASC`
+    )
+    .all(id, req.userId);
+
+  // Build description
+  const lines = [];
+  if (w.focus) lines.push(`Focus: ${w.focus}`);
+  for (let i = 0; i < exercises.length; i++) {
+    const ex = exercises[i];
+    lines.push('');
+    lines.push(`${ex.name}  (target: ${ex.target_sets || '?'}×${ex.target_reps || '?'}${ex.target_load ? ' @ ' + ex.target_load : ''})`);
+    const exLogs = logs.filter((l) => l.exercise_index === i);
+    if (exLogs.length === 0) {
+      lines.push('  (no sets logged)');
+    } else {
+      for (const l of exLogs) {
+        if (l.skipped) {
+          lines.push(`  Set ${l.set_number}: skipped`);
+        } else {
+          const parts = [];
+          if (l.reps != null) parts.push(`${l.reps} reps`);
+          if (l.weight != null) parts.push(`${l.weight} lbs`);
+          if (l.duration_seconds != null) parts.push(`${l.duration_seconds}s`);
+          lines.push(`  Set ${l.set_number}: ${parts.join(' · ') || '(no values)'}`);
+        }
+      }
+    }
+  }
+  lines.push('');
+  lines.push('— Personal Tracker');
+  const description = lines.join('\n').slice(0, 9000);
+
+  // Estimate elapsed_time: 6 min per exercise with logged or target sets, clamp 20-120 min
+  const workingExercises = exercises.filter((e) => (Number(e.target_sets) || 0) > 0);
+  const estMinutes = Math.max(20, Math.min(120, workingExercises.length * 6));
+  const elapsedSeconds = estMinutes * 60;
+
+  // Map style → Strava sport_type
+  const sportType =
+    style === 'gym' ? 'WeightTraining' : style === 'outdoor' ? 'Workout' : 'Workout';
+
+  // start_date_local at 7am on the workout's date
+  const startLocal = `${w.date}T07:00:00`;
+
+  try {
+    const resp = await fetch('https://www.strava.com/api/v3/activities', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tokenRow.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: w.title,
+        type: sportType,
+        sport_type: sportType,
+        start_date_local: startLocal,
+        elapsed_time: elapsedSeconds,
+        description,
+      }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      console.error('Strava upload failed:', resp.status, text);
+      return res.status(500).json({
+        error: `Strava upload failed (${resp.status})`,
+        detail: text.slice(0, 500),
+      });
+    }
+    const activity = await resp.json();
+    res.json({
+      ok: true,
+      activity_id: activity.id,
+      activity_url: `https://www.strava.com/activities/${activity.id}`,
+    });
+  } catch (err) {
+    console.error('Strava push error:', err);
+    res.status(500).json({ error: err.message || 'Strava push failed' });
+  }
+});
+
+// ===== Workouts =====
+
+const WORKOUT_STYLES = new Set(['gym', 'bodyweight', 'outdoor']);
+
+function isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseISODate(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Create a plan: AI generates a weekly template, server materializes one workout per date in range
+app.post('/api/workouts/plans', requireAuth, async (req, res) => {
+  const { goal, style, start_date, end_date, name } = req.body || {};
+  if (!goal || typeof goal !== 'string' || goal.trim().length < 3) {
+    return res.status(400).json({ error: 'goal required (min 3 chars)' });
+  }
+  if (!WORKOUT_STYLES.has(style)) {
+    return res.status(400).json({ error: 'style must be gym, bodyweight, or outdoor' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(end_date)) {
+    return res.status(400).json({ error: 'valid start_date and end_date required (YYYY-MM-DD)' });
+  }
+  const startD = parseISODate(start_date);
+  const endD = parseISODate(end_date);
+  if (endD < startD) {
+    return res.status(400).json({ error: 'end_date must be on or after start_date' });
+  }
+  const daysSpan = Math.round((endD - startD) / 86400000) + 1;
+  if (daysSpan > 365) {
+    return res.status(400).json({ error: 'plan range too long (max 1 year)' });
+  }
+  if (!anthropic) {
+    return res.status(503).json({
+      error: 'AI not configured. Set ANTHROPIC_API_KEY to use plan generation.',
+    });
+  }
+
+  const styleHint = {
+    gym: 'free weights, machines, cables, cardio equipment. Specify weight as a percentage of 1RM or a target intensity (e.g., "RPE 7"), since you don\'t know the user\'s exact strength yet.',
+    bodyweight: 'pushups, pull-ups, squats, lunges, planks, dips, burpees, etc. No equipment. Use variations to scale difficulty.',
+    outdoor: 'rucking, sandbag carries, sandbag squats/cleans, sled drags, hill sprints, sandbag-to-shoulder, farmer carries. Specify ruck weight or sandbag weight in pounds.',
+  }[style];
+
+  try {
+    const aiRes = await anthropic.messages.create({
+      model: 'claude-opus-4-7',
+      max_tokens: 4096,
+      system: `You are an expert strength and conditioning coach. Design a 7-day weekly workout schedule based on the user's goal and chosen style. The schedule will repeat across the user's full date range.
+
+GUIDELINES
+- Match weekly volume to the goal: hypertrophy = 3-5 working sessions per muscle group/week; cardio/endurance = 3-5 cardio sessions; general fitness = 4-5 mixed sessions; recovery/active rest = ~1 hard session.
+- Include warm-up notes when needed.
+- Add at least 1-2 rest days per week (rest days have empty exercises arrays).
+- For each exercise, provide target_sets (int), target_reps (string like "8-10" or "30s hold" or "1 mile"), target_load (intensity instruction — see style hint), rest_seconds (int between sets), and optional notes.
+- STYLE HINT: ${styleHint}
+- day_of_week: 0=Sunday ... 6=Saturday.
+- Cover all 7 days, in day_of_week order (0 to 6). Rest days have title "Rest" and exercises: [].
+- Keep exercise lists concise (4-7 exercises for working days).`,
+      messages: [
+        {
+          role: 'user',
+          content: `Goal: ${goal.trim()}\nStyle: ${style}\nDate range: ${start_date} to ${end_date} (${daysSpan} days)\n\nGenerate the weekly schedule.`,
+        },
+      ],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              summary: { type: 'string' },
+              weekly_schedule: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    day_of_week: { type: 'integer' },
+                    title: { type: 'string' },
+                    focus: { type: 'string' },
+                    exercises: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          name: { type: 'string' },
+                          target_sets: { type: 'integer' },
+                          target_reps: { type: 'string' },
+                          target_load: { type: 'string' },
+                          rest_seconds: { type: 'integer' },
+                          notes: { type: 'string' },
+                        },
+                        required: [
+                          'name',
+                          'target_sets',
+                          'target_reps',
+                          'target_load',
+                          'rest_seconds',
+                          'notes',
+                        ],
+                        additionalProperties: false,
+                      },
+                    },
+                  },
+                  required: ['day_of_week', 'title', 'focus', 'exercises'],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['summary', 'weekly_schedule'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const text = aiRes.content.find((b) => b.type === 'text')?.text || '{}';
+    const parsed = JSON.parse(text);
+    const summary = String(parsed.summary || '').trim();
+    const template = Array.isArray(parsed.weekly_schedule) ? parsed.weekly_schedule : [];
+
+    // Index template by day_of_week
+    const byDow = new Map();
+    for (const day of template) {
+      if (typeof day.day_of_week === 'number') byDow.set(day.day_of_week, day);
+    }
+
+    // Insert plan + workouts in a transaction
+    const planInfo = db
+      .prepare(
+        `INSERT INTO workout_plans (user_id, name, goal, style, start_date, end_date, summary)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        req.userId,
+        (name && String(name).trim()) || `${style} plan`,
+        goal.trim().slice(0, 500),
+        style,
+        start_date,
+        end_date,
+        summary.slice(0, 2000)
+      );
+    const planId = planInfo.lastInsertRowid;
+
+    const insertWorkout = db.prepare(
+      `INSERT INTO workouts (user_id, plan_id, date, title, focus, exercises_json)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    );
+
+    const cursor = new Date(startD);
+    while (cursor <= endD) {
+      const dow = cursor.getDay();
+      const day = byDow.get(dow) || { title: 'Rest', focus: 'rest', exercises: [] };
+      insertWorkout.run(
+        req.userId,
+        planId,
+        isoDate(cursor),
+        String(day.title || 'Workout').slice(0, 200),
+        String(day.focus || '').slice(0, 100),
+        JSON.stringify(Array.isArray(day.exercises) ? day.exercises : [])
+      );
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    const plan = db.prepare('SELECT * FROM workout_plans WHERE id = ?').get(planId);
+    res.json({ plan });
+  } catch (err) {
+    console.error('Plan generation error:', err);
+    res.status(500).json({ error: err.message || 'Plan generation failed' });
+  }
+});
+
+app.get('/api/workouts/plans', requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT id, name, goal, style, start_date, end_date, summary, created_at
+       FROM workout_plans WHERE user_id = ? ORDER BY created_at DESC`
+    )
+    .all(req.userId);
+  res.json(rows);
+});
+
+app.delete('/api/workouts/plans/:id', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  db.prepare('DELETE FROM workout_plans WHERE id = ? AND user_id = ?').run(id, req.userId);
+  res.json({ ok: true });
+});
+
+// List workouts in a date range
+app.get('/api/workouts', requireAuth, (req, res) => {
+  const from = req.query.from;
+  const to = req.query.to;
+  if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !to || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    return res.status(400).json({ error: 'from and to (YYYY-MM-DD) required' });
+  }
+  const rows = db
+    .prepare(
+      `SELECT id, plan_id, date, title, focus, completed, exercises_json
+       FROM workouts WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC`
+    )
+    .all(req.userId, from, to);
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      plan_id: r.plan_id,
+      date: r.date,
+      title: r.title,
+      focus: r.focus,
+      completed: !!r.completed,
+      exercise_count: JSON.parse(r.exercises_json || '[]').length,
+    }))
+  );
+});
+
+// Get a single workout with exercises and existing logs
+app.get('/api/workouts/:id', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  const w = db
+    .prepare('SELECT * FROM workouts WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!w) return res.status(404).json({ error: 'not found' });
+  const exercises = JSON.parse(w.exercises_json || '[]');
+  const logs = db
+    .prepare(
+      `SELECT id, exercise_index, exercise_name, set_number, reps, weight, duration_seconds, notes, skipped, created_at
+       FROM workout_logs WHERE workout_id = ? AND user_id = ? ORDER BY exercise_index ASC, set_number ASC, id ASC`
+    )
+    .all(id, req.userId);
+  res.json({
+    id: w.id,
+    plan_id: w.plan_id,
+    date: w.date,
+    title: w.title,
+    focus: w.focus,
+    notes: w.notes,
+    completed: !!w.completed,
+    completed_at: w.completed_at,
+    exercises,
+    logs,
+  });
+});
+
+// Log a set (or mark a set as skipped)
+app.post('/api/workouts/:id/logs', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { exercise_index, set_number, reps, weight, duration_seconds, notes, skipped } =
+    req.body || {};
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid workout id' });
+  const w = db
+    .prepare('SELECT id, exercises_json FROM workouts WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!w) return res.status(404).json({ error: 'workout not found' });
+  const exercises = JSON.parse(w.exercises_json || '[]');
+  const idx = Number(exercise_index);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= exercises.length) {
+    return res.status(400).json({ error: 'invalid exercise_index' });
+  }
+  const setNum = Number(set_number);
+  if (!Number.isInteger(setNum) || setNum < 1 || setNum > 50) {
+    return res.status(400).json({ error: 'set_number must be 1-50' });
+  }
+  const isSkipped = !!skipped;
+  const repsN = isSkipped || reps === '' || reps == null ? null : Number(reps);
+  const weightN = isSkipped || weight === '' || weight == null ? null : Number(weight);
+  const durationN =
+    isSkipped || duration_seconds === '' || duration_seconds == null
+      ? null
+      : Number(duration_seconds);
+  if (!isSkipped && repsN == null && weightN == null && durationN == null) {
+    return res.status(400).json({ error: 'provide at least one of reps, weight, duration_seconds' });
+  }
+  const info = db
+    .prepare(
+      `INSERT INTO workout_logs (user_id, workout_id, exercise_index, exercise_name, set_number, reps, weight, duration_seconds, notes, skipped)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      req.userId,
+      id,
+      idx,
+      String(exercises[idx].name || '').slice(0, 200),
+      setNum,
+      repsN,
+      weightN,
+      durationN,
+      (notes && String(notes).slice(0, 500)) || null,
+      isSkipped ? 1 : 0
+    );
+  const row = db
+    .prepare('SELECT * FROM workout_logs WHERE id = ? AND user_id = ?')
+    .get(info.lastInsertRowid, req.userId);
+  res.json(row);
+});
+
+app.delete('/api/workouts/logs/:id', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  db.prepare('DELETE FROM workout_logs WHERE id = ? AND user_id = ?').run(id, req.userId);
+  res.json({ ok: true });
+});
+
+// Toggle complete / save notes
+app.post('/api/workouts/:id/complete', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  const w = db.prepare('SELECT completed FROM workouts WHERE id = ? AND user_id = ?').get(id, req.userId);
+  if (!w) return res.status(404).json({ error: 'not found' });
+  const newVal = w.completed ? 0 : 1;
+  db.prepare(
+    `UPDATE workouts SET completed = ?, completed_at = ? WHERE id = ? AND user_id = ?`
+  ).run(newVal, newVal ? new Date().toISOString() : null, id, req.userId);
+  res.json({ ok: true, completed: !!newVal });
+});
+
+// --- Swap one exercise (AI-suggested alternative + apply) ---
+
+app.post('/api/workouts/:id/exercises/:idx/swap', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const idx = Number(req.params.idx);
+  const reason = (req.body && req.body.reason ? String(req.body.reason) : '').slice(0, 300).trim();
+  if (!Number.isInteger(id) || !Number.isInteger(idx)) {
+    return res.status(400).json({ error: 'invalid id or idx' });
+  }
+  if (!anthropic) {
+    return res.status(503).json({ error: 'AI not configured' });
+  }
+  const w = db
+    .prepare('SELECT id, plan_id, title, focus, exercises_json FROM workouts WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!w) return res.status(404).json({ error: 'workout not found' });
+  const exercises = JSON.parse(w.exercises_json || '[]');
+  if (idx < 0 || idx >= exercises.length) {
+    return res.status(400).json({ error: 'invalid exercise_index' });
+  }
+  const current = exercises[idx];
+  const plan = w.plan_id
+    ? db.prepare('SELECT style, goal FROM workout_plans WHERE id = ?').get(w.plan_id)
+    : null;
+  const style = (plan && plan.style) || 'gym';
+
+  const styleHint = {
+    gym: 'free weights, machines, cables, cardio equipment',
+    bodyweight: 'no equipment — pushups, pull-ups, squats, lunges, planks, dips, burpees, variations',
+    outdoor: 'rucking, sandbag carries, sandbag squats/cleans, hill sprints, sled drags, farmer carries',
+  }[style];
+
+  try {
+    const aiRes = await anthropic.messages.create({
+      model: 'claude-opus-4-7',
+      max_tokens: 1024,
+      system: `You suggest a single substitute exercise that:
+- Trains the SAME primary movement pattern / muscle group as the original
+- Matches the workout's focus ("${w.focus || ''}") and the user's chosen style (${style}: ${styleHint})
+- Has comparable volume/intensity to the original
+- Is NOT the same exercise as the original
+Return one substitute as JSON.`,
+      messages: [
+        {
+          role: 'user',
+          content: `Original exercise:
+- name: ${current.name}
+- target_sets: ${current.target_sets}
+- target_reps: ${current.target_reps}
+- target_load: ${current.target_load}
+- rest_seconds: ${current.rest_seconds || 60}
+- notes: ${current.notes || '(none)'}
+
+Workout title: ${w.title}
+Workout focus: ${w.focus || '(unspecified)'}
+Plan goal: ${(plan && plan.goal) || '(unspecified)'}
+${reason ? `User reason for swap: ${reason}` : ''}
+
+Suggest one substitute exercise.`,
+        },
+      ],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              target_sets: { type: 'integer' },
+              target_reps: { type: 'string' },
+              target_load: { type: 'string' },
+              rest_seconds: { type: 'integer' },
+              notes: { type: 'string' },
+              rationale: { type: 'string' },
+            },
+            required: [
+              'name',
+              'target_sets',
+              'target_reps',
+              'target_load',
+              'rest_seconds',
+              'notes',
+              'rationale',
+            ],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const text = aiRes.content.find((b) => b.type === 'text')?.text || '{}';
+    const parsed = JSON.parse(text);
+    res.json({ original: current, suggestion: parsed });
+  } catch (err) {
+    console.error('Swap suggestion error:', err);
+    res.status(500).json({ error: err.message || 'Swap suggestion failed' });
+  }
+});
+
+app.post('/api/workouts/:id/exercises/:idx/apply-swap', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const idx = Number(req.params.idx);
+  const suggestion = req.body && req.body.suggestion;
+  if (!Number.isInteger(id) || !Number.isInteger(idx)) {
+    return res.status(400).json({ error: 'invalid id or idx' });
+  }
+  if (!suggestion || typeof suggestion !== 'object' || !suggestion.name) {
+    return res.status(400).json({ error: 'suggestion required' });
+  }
+  const w = db
+    .prepare('SELECT id, exercises_json FROM workouts WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!w) return res.status(404).json({ error: 'workout not found' });
+  const exercises = JSON.parse(w.exercises_json || '[]');
+  if (idx < 0 || idx >= exercises.length) {
+    return res.status(400).json({ error: 'invalid exercise_index' });
+  }
+  exercises[idx] = {
+    name: String(suggestion.name).slice(0, 200),
+    target_sets: Number(suggestion.target_sets) || 0,
+    target_reps: String(suggestion.target_reps || '').slice(0, 100),
+    target_load: String(suggestion.target_load || '').slice(0, 200),
+    rest_seconds: Number(suggestion.rest_seconds) || 60,
+    notes: suggestion.notes ? String(suggestion.notes).slice(0, 500) : '',
+  };
+  // Clear logs for this exercise so they don't reference the old movement
+  db.prepare(
+    'DELETE FROM workout_logs WHERE workout_id = ? AND user_id = ? AND exercise_index = ?'
+  ).run(id, req.userId, idx);
+  db.prepare('UPDATE workouts SET exercises_json = ? WHERE id = ? AND user_id = ?').run(
+    JSON.stringify(exercises),
+    id,
+    req.userId
+  );
+  res.json({ ok: true, exercises });
+});
+
+// --- AI coach chat ---
+
+function sanitizeExercises(exercises) {
+  if (!Array.isArray(exercises)) return [];
+  return exercises.map((e) => ({
+    name: String(e.name || '').slice(0, 200),
+    target_sets: Number(e.target_sets) || 0,
+    target_reps: String(e.target_reps || '').slice(0, 100),
+    target_load: String(e.target_load || '').slice(0, 200),
+    rest_seconds: Number(e.rest_seconds) || 60,
+    notes: e.notes ? String(e.notes).slice(0, 500) : '',
+  }));
+}
+
+const COACH_TOOLS = [
+  {
+    name: 'update_workout',
+    description:
+      'Replace the exercises (and optionally title/focus) of one specific workout. Use when the user wants to change a single day, not the recurring weekly pattern.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workout_id: { type: 'integer', description: 'The id of the workout to update.' },
+        title: { type: 'string' },
+        focus: { type: 'string' },
+        exercises: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              target_sets: { type: 'integer' },
+              target_reps: { type: 'string' },
+              target_load: { type: 'string' },
+              rest_seconds: { type: 'integer' },
+              notes: { type: 'string' },
+            },
+            required: ['name', 'target_sets', 'target_reps', 'target_load', 'rest_seconds'],
+          },
+        },
+      },
+      required: ['workout_id', 'exercises'],
+    },
+  },
+  {
+    name: 'update_recurring_workout',
+    description:
+      "Update every future workout (on or after a given start date) within the plan that falls on a specific day of the week. Use when the user wants a permanent change to their weekly schedule, e.g. 'always do legs harder on Mondays'.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'integer' },
+        day_of_week: { type: 'integer', description: '0=Sun, 1=Mon, ..., 6=Sat' },
+        from_date: { type: 'string', description: 'YYYY-MM-DD. Only update workouts on or after this date.' },
+        title: { type: 'string' },
+        focus: { type: 'string' },
+        exercises: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              target_sets: { type: 'integer' },
+              target_reps: { type: 'string' },
+              target_load: { type: 'string' },
+              rest_seconds: { type: 'integer' },
+              notes: { type: 'string' },
+            },
+            required: ['name', 'target_sets', 'target_reps', 'target_load', 'rest_seconds'],
+          },
+        },
+      },
+      required: ['plan_id', 'day_of_week', 'from_date', 'exercises'],
+    },
+  },
+];
+
+function executeCoachTool(toolName, input, userId, planId) {
+  if (toolName === 'update_workout') {
+    const w = db
+      .prepare('SELECT id, plan_id FROM workouts WHERE id = ? AND user_id = ?')
+      .get(input.workout_id, userId);
+    if (!w) throw new Error(`workout ${input.workout_id} not found`);
+    if (w.plan_id !== planId) throw new Error('workout does not belong to this plan');
+    const exercises = sanitizeExercises(input.exercises);
+    const sets = ['exercises_json = ?'];
+    const args = [JSON.stringify(exercises)];
+    if (input.title) {
+      sets.push('title = ?');
+      args.push(String(input.title).slice(0, 200));
+    }
+    if (input.focus) {
+      sets.push('focus = ?');
+      args.push(String(input.focus).slice(0, 100));
+    }
+    args.push(input.workout_id, userId);
+    db.prepare(`UPDATE workouts SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...args);
+    return { ok: true, updated_workout_id: input.workout_id, exercise_count: exercises.length };
+  }
+
+  if (toolName === 'update_recurring_workout') {
+    if (input.plan_id !== planId) throw new Error('plan_id mismatch');
+    const dow = Number(input.day_of_week);
+    if (!Number.isInteger(dow) || dow < 0 || dow > 6) throw new Error('invalid day_of_week');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from_date)) throw new Error('invalid from_date');
+    const exercises = sanitizeExercises(input.exercises);
+    const candidates = db
+      .prepare(
+        `SELECT id, date FROM workouts WHERE user_id = ? AND plan_id = ? AND date >= ? ORDER BY date ASC`
+      )
+      .all(userId, planId, input.from_date);
+    let updated = 0;
+    for (const w of candidates) {
+      const d = parseISODate(w.date);
+      if (d.getDay() !== dow) continue;
+      const sets = ['exercises_json = ?'];
+      const args = [JSON.stringify(exercises)];
+      if (input.title) {
+        sets.push('title = ?');
+        args.push(String(input.title).slice(0, 200));
+      }
+      if (input.focus) {
+        sets.push('focus = ?');
+        args.push(String(input.focus).slice(0, 100));
+      }
+      args.push(w.id, userId);
+      db.prepare(`UPDATE workouts SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...args);
+      updated++;
+    }
+    return { ok: true, updated_count: updated };
+  }
+
+  throw new Error(`unknown tool ${toolName}`);
+}
+
+function buildCoachSystemPrompt(plan, recentWorkouts, recentLogs) {
+  const today = isoDate(new Date());
+  let prompt = `You are an expert fitness coach helping the user iterate on their personalized workout plan.
+
+CURRENT PLAN
+- Plan ID: ${plan.id}
+- Name: ${plan.name}
+- Goal: ${plan.goal}
+- Style: ${plan.style}
+- Dates: ${plan.start_date} to ${plan.end_date}
+- Today: ${today}
+- Plan summary: ${plan.summary || '(none)'}
+
+UPCOMING & RECENT WORKOUTS (last/next 14 days)
+`;
+  for (const w of recentWorkouts) {
+    const exercises = JSON.parse(w.exercises_json || '[]');
+    const ex = exercises.length
+      ? exercises.map((e) => `${e.name} (${e.target_sets}×${e.target_reps} @ ${e.target_load})`).join('; ')
+      : '— rest day —';
+    prompt += `- workout_id=${w.id} ${w.date} (${dowName(parseISODate(w.date).getDay())}) "${w.title}" [${w.focus || ''}]${w.completed ? ' ✓' : ''}\n    ${ex}\n`;
+  }
+
+  if (recentLogs.length > 0) {
+    prompt += `\nRECENTLY LOGGED PERFORMANCE (most recent first, max 30 sets)\n`;
+    for (const l of recentLogs) {
+      const parts = [];
+      if (l.reps != null) parts.push(`${l.reps} reps`);
+      if (l.weight != null) parts.push(`${l.weight} lbs`);
+      if (l.duration_seconds != null) parts.push(`${l.duration_seconds}s`);
+      prompt += `- ${l.date} ${l.exercise_name} set ${l.set_number}: ${parts.join(' · ') || '(no values)'}\n`;
+    }
+  }
+
+  prompt += `\nGUIDANCE
+- Be concise. Short answers, no fluff.
+- Give actionable advice grounded in the user's actual logged performance, not generic platitudes.
+- When the user asks you to change the plan, USE THE TOOLS to actually make the change. Don't just describe what you would change.
+  - update_workout: one-time change for a single day. Use when the user references a specific date or workout.
+  - update_recurring_workout: change every future occurrence of a weekday (today and later). Use for "always do ... on Mondays" style requests.
+- Prefer to keep the user's preferred style (${plan.style}). Don't suggest gym exercises if they picked bodyweight, etc.
+- After making a change, briefly tell the user what you changed.`;
+
+  return prompt;
+}
+
+function dowName(dow) {
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow];
+}
+
+app.get('/api/workouts/plans/:id/coach/messages', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  const plan = db
+    .prepare('SELECT id FROM workout_plans WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!plan) return res.status(404).json({ error: 'plan not found' });
+  const rows = db
+    .prepare(
+      'SELECT id, role, content_json, created_at FROM workout_coach_messages WHERE plan_id = ? AND user_id = ? ORDER BY id ASC'
+    )
+    .all(id, req.userId);
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      content: JSON.parse(r.content_json),
+      created_at: r.created_at,
+    }))
+  );
+});
+
+app.delete('/api/workouts/plans/:id/coach/messages', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  db.prepare('DELETE FROM workout_coach_messages WHERE plan_id = ? AND user_id = ?').run(
+    id,
+    req.userId
+  );
+  res.json({ ok: true });
+});
+
+app.post('/api/workouts/plans/:id/coach/chat', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  if (!anthropic) {
+    return res.status(503).json({ error: 'AI coach requires ANTHROPIC_API_KEY' });
+  }
+  const userMessage = (req.body && req.body.message ? String(req.body.message) : '').trim();
+  if (!userMessage) return res.status(400).json({ error: 'message required' });
+  if (userMessage.length > 4000) {
+    return res.status(400).json({ error: 'message too long (max 4000 chars)' });
+  }
+
+  const plan = db
+    .prepare('SELECT * FROM workout_plans WHERE id = ? AND user_id = ?')
+    .get(id, req.userId);
+  if (!plan) return res.status(404).json({ error: 'plan not found' });
+
+  // Build context: workouts within ±14 days, recent logs
+  const today = new Date();
+  const ctxFrom = new Date(today);
+  ctxFrom.setDate(today.getDate() - 7);
+  const ctxTo = new Date(today);
+  ctxTo.setDate(today.getDate() + 14);
+  const recentWorkouts = db
+    .prepare(
+      `SELECT id, date, title, focus, completed, exercises_json
+       FROM workouts WHERE user_id = ? AND plan_id = ? AND date >= ? AND date <= ?
+       ORDER BY date ASC`
+    )
+    .all(req.userId, id, isoDate(ctxFrom), isoDate(ctxTo));
+  const recentLogs = db
+    .prepare(
+      `SELECT l.exercise_name, l.set_number, l.reps, l.weight, l.duration_seconds, w.date
+       FROM workout_logs l JOIN workouts w ON l.workout_id = w.id
+       WHERE l.user_id = ? AND w.plan_id = ?
+       ORDER BY w.date DESC, l.set_number DESC LIMIT 30`
+    )
+    .all(req.userId, id);
+
+  const systemPrompt = buildCoachSystemPrompt(plan, recentWorkouts, recentLogs);
+
+  // Load history and append the new user message
+  const history = db
+    .prepare(
+      'SELECT role, content_json FROM workout_coach_messages WHERE plan_id = ? AND user_id = ? ORDER BY id ASC'
+    )
+    .all(id, req.userId)
+    .map((r) => ({ role: r.role, content: JSON.parse(r.content_json) }));
+
+  // Sanitize history: drop trailing assistant messages that have a tool_use without a matching tool_result
+  // (defensive; shouldn't happen with normal flow)
+  const messages = [...history, { role: 'user', content: userMessage }];
+
+  // Save the user message first
+  db.prepare(
+    'INSERT INTO workout_coach_messages (user_id, plan_id, role, content_json) VALUES (?, ?, ?, ?)'
+  ).run(req.userId, id, 'user', JSON.stringify(userMessage));
+
+  const modifications = [];
+  let stoppedReason = null;
+  const MAX_ITERATIONS = 6;
+  let iter = 0;
+
+  try {
+    while (iter < MAX_ITERATIONS) {
+      iter++;
+      const resp = await anthropic.messages.create({
+        model: 'claude-opus-4-7',
+        max_tokens: 4096,
+        system: systemPrompt,
+        tools: COACH_TOOLS,
+        messages,
+      });
+
+      // Append assistant turn
+      messages.push({ role: 'assistant', content: resp.content });
+      db.prepare(
+        'INSERT INTO workout_coach_messages (user_id, plan_id, role, content_json) VALUES (?, ?, ?, ?)'
+      ).run(req.userId, id, 'assistant', JSON.stringify(resp.content));
+
+      if (resp.stop_reason === 'end_turn' || resp.stop_reason === 'stop_sequence') {
+        stoppedReason = resp.stop_reason;
+        break;
+      }
+
+      if (resp.stop_reason !== 'tool_use') {
+        stoppedReason = resp.stop_reason;
+        break;
+      }
+
+      // Execute tools
+      const toolUses = resp.content.filter((b) => b.type === 'tool_use');
+      const toolResults = [];
+      for (const tu of toolUses) {
+        let result;
+        let isError = false;
+        try {
+          result = executeCoachTool(tu.name, tu.input, req.userId, id);
+          modifications.push({ tool: tu.name, input: tu.input, result });
+        } catch (e) {
+          result = { error: e.message };
+          isError = true;
+          modifications.push({ tool: tu.name, error: e.message });
+        }
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: tu.id,
+          content: JSON.stringify(result),
+          ...(isError ? { is_error: true } : {}),
+        });
+      }
+      const userToolMsg = { role: 'user', content: toolResults };
+      messages.push(userToolMsg);
+      db.prepare(
+        'INSERT INTO workout_coach_messages (user_id, plan_id, role, content_json) VALUES (?, ?, ?, ?)'
+      ).run(req.userId, id, 'user', JSON.stringify(toolResults));
+    }
+
+    if (iter >= MAX_ITERATIONS) stoppedReason = 'max_iterations';
+
+    res.json({
+      ok: true,
+      stop_reason: stoppedReason,
+      modifications,
+    });
+  } catch (err) {
+    console.error('Coach chat error:', err);
+    res.status(500).json({ error: err.message || 'Coach chat failed' });
+  }
+});
+
+app.post('/api/workouts/:id/notes', requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { notes } = req.body || {};
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+  db.prepare('UPDATE workouts SET notes = ? WHERE id = ? AND user_id = ?').run(
+    notes ? String(notes).slice(0, 2000) : null,
+    id,
+    req.userId
+  );
+  res.json({ ok: true });
 });
 
 // ===== Meal templates (reusable quick meals) =====
